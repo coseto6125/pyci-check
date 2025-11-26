@@ -68,19 +68,19 @@ jobs:
       - name: Run pyci-check imports check (static)
         run: |
           echo "::group::Import Check (Static)"
-          uv run pyci-check imports
+          uv run pyci-check imports src/
           echo "::endgroup::"
 
       - name: Run pyci-check imports check (dynamic)
         run: |
           echo "::group::Import Check (Dynamic)"
-          uv run pyci-check imports --i-understand-this-will-execute-code
+          uv run pyci-check imports src/ --i-understand-this-will-execute-code
           echo "::endgroup::"
 
       - name: Run pyci-check full check
         run: |
           echo "::group::Full Check"
-          uv run pyci-check check .
+          uv run pyci-check check src/
           echo "::endgroup::"
 
   # ==================== Cross-Platform Tests ====================
@@ -88,7 +88,7 @@ jobs:
     name: Test on ${{ matrix.os }} (Python ${{ matrix.python-version }})
     runs-on: ${{ matrix.os }}
     strategy:
-      fail-fast: false
+      fail-fast: true
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
         python-version: ["3.11", "3.12", "3.13"]
