@@ -22,20 +22,22 @@ def calculate_optimal_workers(task_count: int) -> int:
 @lru_cache(maxsize=1)
 def get_exclude_dirs_set() -> frozenset[str]:
     """取得預設排除目錄集合 (快取)."""
-    return frozenset({
-        "__pycache__",
-        ".git",
-        "venv",
-        "env",
-        ".venv",
-        "node_modules",
-        "htmlcov",
-        ".pytest_cache",
-        "build",
-        "dist",
-        ".eggs",
-        "*.egg-info",
-    })
+    return frozenset(
+        {
+            "__pycache__",
+            ".git",
+            "venv",
+            "env",
+            ".venv",
+            "node_modules",
+            "htmlcov",
+            ".pytest_cache",
+            "build",
+            "dist",
+            ".eggs",
+            "*.egg-info",
+        }
+    )
 
 
 def should_exclude_path(file_path: str, exclude_dirs: frozenset[str]) -> bool:

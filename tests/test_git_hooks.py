@@ -53,7 +53,6 @@ class TestGitHooks:
         assert git_dir is not None
         assert Path(git_dir).name == ".git"
 
-
     # 新的追加模式測試
 
     def test_add_hook_to_new_file(self, temp_dir):

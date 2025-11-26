@@ -173,13 +173,13 @@ if __name__ == "__main__":
 
     def test_check_file_f_string(self, temp_dir):
         """測試 f-string 語法."""
-        code = '''
+        code = """
 name = "World"
 value = 42
 print(f"Hello, {name}!")
 print(f"Value: {value:>10}")
 print(f"Expression: {2 + 2}")
-'''
+"""
         test_file = temp_dir / "fstring.py"
         test_file.write_text(code, encoding="utf-8")
 
@@ -190,13 +190,13 @@ print(f"Expression: {2 + 2}")
 
     def test_check_file_walrus_operator(self, temp_dir):
         """測試海象運算符 := (Python 3.8+)."""
-        code = '''
+        code = """
 if (n := len([1, 2, 3])) > 2:
     print(f"Length is {n}")
 
 while (line := input()) != "quit":
     print(f"You entered: {line}")
-'''
+"""
         test_file = temp_dir / "walrus.py"
         test_file.write_text(code, encoding="utf-8")
 
@@ -207,7 +207,7 @@ while (line := input()) != "quit":
 
     def test_check_file_match_statement(self, temp_dir):
         """測試 match 語句 (Python 3.10+)."""
-        code = '''
+        code = """
 def http_error(status):
     match status:
         case 400:
@@ -218,7 +218,7 @@ def http_error(status):
             return "I'm a teapot"
         case _:
             return "Something's wrong"
-'''
+"""
         test_file = temp_dir / "match.py"
         test_file.write_text(code, encoding="utf-8")
 

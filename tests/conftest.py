@@ -91,14 +91,17 @@ def temp_project(temp_dir):
 
     # 創建 pyproject.toml
     pyproject = temp_dir / "pyproject.toml"
-    pyproject.write_text("""
+    pyproject.write_text(
+        """
 [tool.pyci-check]
 language = "en"
 
 [tool.ruff]
 src = ["src", "tests"]
 exclude = [".venv", "build"]
-""", encoding="utf-8")
+""",
+        encoding="utf-8",
+    )
 
     return temp_dir
 
