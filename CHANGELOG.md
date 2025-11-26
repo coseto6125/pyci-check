@@ -8,9 +8,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Planned
-- English and Simplified Chinese translations for documentation
 - Additional test coverage
 - Performance benchmarks
+
+## [0.1.1] - 2024-11-27
+
+### Added
+- **LICENSE**: MIT License file
+- **CONTRIBUTING.md**: Contribution guidelines with multi-language support (en/zh_TW/zh_CN)
+- **Dev Dependencies**: Added `[project.optional-dependencies]` with pytest, pytest-cov, and ruff
+
+### Changed
+- **Installation Order**: Updated all README files to prioritize `uv add` over `uv pip install`
+- **Documentation**: Improved pyproject.toml comments for exclude configuration
+- **Documentation**: Completed English and Simplified Chinese translations
+
+### Fixed
+- **Ruff Configuration**: Added S603 exception for test files (subprocess usage)
 
 ## [0.1.0] - 2024-11-26
 
@@ -55,5 +69,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Automated release workflow
   - PyPI publishing support (Trusted Publisher)
 
-[Unreleased]: https://github.com/coseto6125/pyci-check/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/coseto6125/pyci-check/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/coseto6125/pyci-check/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/coseto6125/pyci-check/releases/tag/v0.1.0

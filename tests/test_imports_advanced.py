@@ -1,11 +1,5 @@
 """Import 檢查進階測試."""
 
-import os
-import tempfile
-from pathlib import Path
-
-import pytest
-
 from pyci_check.imports import (
     check_missing_modules,
     check_module_importable_static,
@@ -22,7 +16,7 @@ class TestImportAdvanced:
     def test_process_single_file_valid(self, temp_dir):
         """測試處理有效的 Python 檔案."""
         test_file = temp_dir / "test.py"
-        test_file.write_text("import os\nimport sys\nfrom pathlib import Path\n")
+        test_file.write_text("import os\nimport sys\nfrom pathlib import Path\n", encoding="utf-8")
 
         imports, relative_imports = process_single_file(str(test_file))
 
@@ -32,7 +26,7 @@ class TestImportAdvanced:
     def test_process_single_file_with_relative_imports(self, temp_dir):
         """測試處理包含相對導入的檔案."""
         test_file = temp_dir / "test.py"
-        test_file.write_text("from . import module1\nfrom ..utils import helper\n")
+        test_file.write_text("from . import module1\nfrom ..utils import helper\n", encoding="utf-8")
 
         imports, relative_imports = process_single_file(str(test_file))
 
@@ -54,7 +48,7 @@ class TestImportAdvanced:
 
     def test_extract_from_all_files(self, temp_project):
         """測試從所有檔案提取 import."""
-        imports, relative_imports = extract_from_all_files(str(temp_project))
+        imports, _relative_imports = extract_from_all_files(str(temp_project))
 
         # temp_project 包含 src/main.py 和 tests/test_main.py
         assert len(imports) > 0
@@ -66,8 +60,8 @@ class TestImportAdvanced:
         # 創建檔案結構
         (temp_dir / "src").mkdir()
         (temp_dir / ".venv").mkdir()
-        (temp_dir / "src" / "main.py").write_text("import os")
-        (temp_dir / ".venv" / "test.py").write_text("import sys")
+        (temp_dir / "src" / "main.py").write_text("import os", encoding="utf-8")
+        (temp_dir / ".venv" / "test.py").write_text("import sys", encoding="utf-8")
 
         imports, _ = extract_from_all_files(
             str(temp_dir),
@@ -89,7 +83,7 @@ class TestImportAdvanced:
     def test_check_module_importable_static_project_module(self, temp_project):
         """測試靜態檢查專案模組."""
         # 創建一個專案模組
-        (temp_project / "src" / "mymodule.py").write_text("print('test')")
+        (temp_project / "src" / "mymodule.py").write_text("print('test')", encoding="utf-8")
 
         module, error = check_module_importable_static(
             "mymodule",
@@ -214,7 +208,7 @@ language = "en"
     def test_process_file_with_future_import(self, temp_dir):
         """測試處理包含 __future__ import 的檔案."""
         test_file = temp_dir / "test.py"
-        test_file.write_text("from __future__ import annotations\nimport os\n")
+        test_file.write_text("from __future__ import annotations\nimport os\n", encoding="utf-8")
 
         imports, _ = process_single_file(str(test_file))
 

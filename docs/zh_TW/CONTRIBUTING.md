@@ -51,26 +51,26 @@
 4. **執行測試**
    ```bash
    # 執行所有測試
-   pytest
-   
+   uv run pytest
+
    # 執行特定測試類別
-   pytest tests/test_syntax.py
-   pytest tests/test_imports.py
-   
+   uv run pytest tests/test_syntax.py
+   uv run pytest tests/test_imports.py
+
    # 執行含覆蓋率的測試
-   pytest --cov=pyci_check
+   uv run pytest --cov=pyci_check
    ```
 
 5. **執行程式碼品質檢查**
    ```bash
    # 語法和 import 檢查
-   pyci-check check .
-   
+   uv run pyci-check check .
+
    # Linting
-   ruff check .
-   
+   uv run ruff check .
+
    # 格式化
-   ruff format .
+   uv run ruff format .
    ```
 
 6. **提交變更**
@@ -125,8 +125,8 @@
 
 3. **以開發模式安裝**
    ```bash
-   # 使用 uv（推薦）
-   uv pip install -e ".[dev]"
+   # 使用 uv（推薦 - 更快更可靠）
+   uv sync --extra dev
 
    # 或使用 pip
    pip install -e ".[dev]"
@@ -136,16 +136,13 @@
 
 ```bash
 # 所有測試
-pytest
+uv run pytest
 
 # 特定測試檔案
-pytest tests/test_syntax.py
+uv run pytest tests/test_syntax.py
 
 # 含覆蓋率報告
-pytest --cov=pyci_check --cov-report=html
-
-# Watch 模式（需要 pytest-watch）
-ptw
+uv run pytest --cov=pyci_check --cov-report=html
 ```
 
 ### 程式碼風格
@@ -157,10 +154,10 @@ ptw
 
 提交 PR 前，請確保：
 ```bash
-pyci-check check .
-ruff check .
-ruff format .
-pytest
+uv run pyci-check check .
+uv run ruff check .
+uv run ruff format .
+uv run pytest
 ```
 
 ## 專案結構

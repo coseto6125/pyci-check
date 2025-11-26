@@ -24,6 +24,8 @@ class TestIntegration:
             [sys.executable, "-m", "pyci_check.cli", "syntax"],
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             check=False,
             cwd=str(temp_project),
             env=env,
@@ -34,7 +36,7 @@ class TestIntegration:
     def test_full_workflow_with_syntax_error(self, project_root, temp_dir):
         """測試檢測語法錯誤的完整流程."""
         # 創建語法錯誤的檔案
-        (temp_dir / "error.py").write_text("def incomplete(")
+        (temp_dir / "error.py").write_text("def incomplete(", encoding="utf-8")
 
         pythonpath = str(project_root / "src")
         env = os.environ.copy()
@@ -44,13 +46,15 @@ class TestIntegration:
             [sys.executable, "-m", "pyci_check.cli", "syntax"],
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             check=False,
             cwd=str(temp_dir),
             env=env,
         )
 
         assert result.returncode == 1
-        assert "SyntaxError" in result.stdout or "SyntaxError" in result.stderr
+        assert "SyntaxError" in (result.stdout or "") or "SyntaxError" in (result.stderr or "")
 
     def test_quiet_mode_no_output(self, project_root, temp_project):
         """測試安靜模式沒有輸出."""
@@ -62,14 +66,17 @@ class TestIntegration:
             [sys.executable, "-m", "pyci_check.cli", "syntax", "--quiet"],
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             check=False,
             cwd=str(temp_project),
             env=env,
         )
 
         assert result.returncode == 0
+        stdout = result.stdout or ""
         # 安靜模式成功時應該沒有輸出
-        assert len(result.stdout) == 0 or "Checking" not in result.stdout
+        assert len(stdout) == 0 or "Checking" not in stdout
 
     def test_help_command(self, project_root):
         """測試 --help 命令."""
@@ -81,19 +88,22 @@ class TestIntegration:
             [sys.executable, "-m", "pyci_check.cli", "--help"],
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             check=False,
             env=env,
         )
 
         assert result.returncode == 0
-        assert "pyci-check" in result.stdout
-        assert "syntax" in result.stdout
+        stdout = result.stdout or ""
+        assert "pyci-check" in stdout
+        assert "syntax" in stdout
 
     def test_parallel_file_checking(self, project_root, temp_dir):
         """測試並行檢查多個檔案."""
         # 創建多個檔案
         for i in range(20):
-            (temp_dir / f"file{i}.py").write_text(f"print('file {i}')")
+            (temp_dir / f"file{i}.py").write_text(f"print('file {i}')", encoding="utf-8")
 
         pythonpath = str(project_root / "src")
         env = os.environ.copy()
@@ -103,6 +113,8 @@ class TestIntegration:
             [sys.executable, "-m", "pyci_check.cli", "syntax"],
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             check=False,
             cwd=str(temp_dir),
             env=env,
@@ -113,10 +125,10 @@ class TestIntegration:
     def test_mixed_valid_and_invalid_files(self, project_root, temp_dir):
         """測試混合有效和無效的檔案."""
         # 創建有效檔案
-        (temp_dir / "valid.py").write_text("import os\nprint('ok')")
+        (temp_dir / "valid.py").write_text("import os\nprint('ok')", encoding="utf-8")
 
         # 創建無效檔案
-        (temp_dir / "invalid.py").write_text("print('unclosed")
+        (temp_dir / "invalid.py").write_text("print('unclosed", encoding="utf-8")
 
         pythonpath = str(project_root / "src")
         env = os.environ.copy()
@@ -126,6 +138,8 @@ class TestIntegration:
             [sys.executable, "-m", "pyci_check.cli", "syntax"],
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             check=False,
             cwd=str(temp_dir),
             env=env,
@@ -138,8 +152,8 @@ class TestIntegration:
         # 創建目錄結構
         (temp_dir / "src").mkdir()
         (temp_dir / ".venv").mkdir()
-        (temp_dir / "src" / "main.py").write_text("import os")
-        (temp_dir / ".venv" / "bad.py").write_text("print('unclosed")
+        (temp_dir / "src" / "main.py").write_text("import os", encoding="utf-8")
+        (temp_dir / ".venv" / "bad.py").write_text("print('unclosed", encoding="utf-8")
 
         # 創建 pyproject.toml 排除 .venv
         (temp_dir / "pyproject.toml").write_text("""
@@ -156,6 +170,8 @@ exclude = [".venv"]
             [sys.executable, "-m", "pyci_check.cli", "syntax"],
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             check=False,
             cwd=str(temp_dir),
             env=env,
@@ -183,6 +199,8 @@ exclude = [".venv"]
             [sys.executable, "-m", "pyci_check.cli", "syntax", "--quiet"],
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             check=False,
             cwd=str(temp_dir),
             env=env,
@@ -208,6 +226,8 @@ exclude = [".venv"]
             [sys.executable, "-m", "pyci_check.cli", "syntax"],
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             check=False,
             cwd=str(temp_dir),
             env=env,
@@ -217,7 +237,7 @@ exclude = [".venv"]
 
     def test_error_reporting_format(self, project_root, temp_dir):
         """測試錯誤報告格式."""
-        (temp_dir / "error.py").write_text("def test(\npass")
+        (temp_dir / "error.py").write_text("def test(\npass", encoding="utf-8")
 
         pythonpath = str(project_root / "src")
         env = os.environ.copy()
@@ -227,6 +247,8 @@ exclude = [".venv"]
             [sys.executable, "-m", "pyci_check.cli", "syntax"],
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             check=False,
             cwd=str(temp_dir),
             env=env,
@@ -234,4 +256,4 @@ exclude = [".venv"]
 
         assert result.returncode == 1
         # 錯誤報告應包含檔案名稱
-        assert "error.py" in result.stdout or "error.py" in result.stderr
+        assert "error.py" in (result.stdout or "") or "error.py" in (result.stderr or "")

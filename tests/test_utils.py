@@ -1,7 +1,5 @@
 """測試工具函數."""
 
-import pytest
-
 from pyci_check.utils import calculate_optimal_workers, get_exclude_dirs_set, should_exclude_path
 
 

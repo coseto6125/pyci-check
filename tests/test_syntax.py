@@ -41,14 +41,14 @@ class TestSyntaxChecker:
         """測試查找 Python 檔案."""
         with tempfile.TemporaryDirectory() as tmpdir:
             # 創建測試檔案
-            (Path(tmpdir) / "test1.py").write_text("print('test1')")
-            (Path(tmpdir) / "test2.py").write_text("print('test2')")
-            (Path(tmpdir) / "test.txt").write_text("not python")
+            (Path(tmpdir) / "test1.py").write_text("print('test1')", encoding="utf-8")
+            (Path(tmpdir) / "test2.py").write_text("print('test2')", encoding="utf-8")
+            (Path(tmpdir) / "test.txt").write_text("not python", encoding="utf-8")
 
             # 創建應排除的目錄
             venv_dir = Path(tmpdir) / ".venv"
             venv_dir.mkdir()
-            (venv_dir / "test3.py").write_text("print('test3')")
+            (venv_dir / "test3.py").write_text("print('test3')", encoding="utf-8")
 
             files = find_python_files(tmpdir)
 
@@ -62,11 +62,11 @@ class TestSyntaxChecker:
         with tempfile.TemporaryDirectory() as tmpdir:
             # 創建有效檔案
             valid_file = Path(tmpdir) / "valid.py"
-            valid_file.write_text("print('hello')")
+            valid_file.write_text("print('hello')", encoding="utf-8")
 
             # 創建無效檔案
             invalid_file = Path(tmpdir) / "invalid.py"
-            invalid_file.write_text("print('unclosed")
+            invalid_file.write_text("print('unclosed", encoding="utf-8")
 
             files = [str(valid_file), str(invalid_file)]
             success_count, error_count, errors = check_files_parallel(files)

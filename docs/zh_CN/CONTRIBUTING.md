@@ -51,26 +51,26 @@
 4. **执行测试**
    ```bash
    # 执行所有测试
-   pytest
+   uv run pytest
    
    # 执行特定测试类别
-   pytest tests/test_syntax.py
-   pytest tests/test_imports.py
+   uv run pytest tests/test_syntax.py
+   uv run pytest tests/test_imports.py
    
    # 执行含覆盖率的测试
-   pytest --cov=pyci_check
+   uv run pytest --cov=pyci_check
    ```
 
 5. **执行程式码品质检查**
    ```bash
    # 语法和 import 检查
-   pyci-check check .
+   uv run pyci-check check .
    
    # Linting
-   ruff check .
+   uv run ruff check .
    
    # 格式化
-   ruff format .
+   uv run ruff format .
    ```
 
 6. **提交变更**
@@ -126,7 +126,7 @@
 3. **以开发模式安裝**
    ```bash
    # 使用 uv（推荐）
-   uv pip install -e ".[dev]"
+   uv sync --extra dev
 
    # 或使用 pip
    pip install -e ".[dev]"
@@ -136,13 +136,13 @@
 
 ```bash
 # 所有测试
-pytest
+uv run pytest
 
 # 特定测试档案
-pytest tests/test_syntax.py
+uv run pytest tests/test_syntax.py
 
 # 含覆盖率报告
-pytest --cov=pyci_check --cov-report=html
+uv run pytest --cov=pyci_check --cov-report=html
 
 # Watch 模式（需要 pytest-watch）
 ptw
@@ -157,16 +157,16 @@ ptw
 
 提交 PR 前，请确保：
 ```bash
-pyci-check check .
-ruff check .
-ruff format .
-pytest
+uv run pyci-check check .
+uv run ruff check .
+uv run ruff format .
+uv run pytest
 ```
 
 ## 专案结构
 
 ```
-pyci-check/
+uv run pyci-check/
 ├── src/pyci_check/     # 主要原始码
 │   ├── cli.py          # CLI 介面
 │   ├── syntax.py       # 语法检查
