@@ -17,14 +17,17 @@ class TestCLI:
             [sys.executable, "-m", "pyci_check.cli", "--help"],
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             check=False,
             env={"PYTHONPATH": "src"},
         )
 
         assert result.returncode == 0
-        assert "pyci-check" in result.stdout
-        assert "syntax" in result.stdout
-        assert "imports" in result.stdout
+        stdout = result.stdout or ""
+        assert "pyci-check" in stdout
+        assert "syntax" in stdout
+        assert "imports" in stdout
 
     def test_cli_syntax_command(self):
         """測試 syntax 子命令."""
@@ -43,6 +46,8 @@ class TestCLI:
                 [sys.executable, "-m", "pyci_check.cli", "syntax"],
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
                 check=False,
                 cwd=tmpdir,
                 env=env,
@@ -61,13 +66,17 @@ class TestCLI:
                 [sys.executable, "-m", "pyci_check.cli", "syntax"],
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
                 check=False,
                 cwd=tmpdir,
                 env=pythonpath_env,
             )
 
             assert result.returncode == 1
-            assert "SyntaxError" in result.stdout or "SyntaxError" in result.stderr
+            stdout = result.stdout or ""
+            stderr = result.stderr or ""
+            assert "SyntaxError" in stdout or "SyntaxError" in stderr
 
     def test_cli_quiet_mode(self, pythonpath_env):
         """測試安靜模式."""
@@ -80,11 +89,14 @@ class TestCLI:
                 [sys.executable, "-m", "pyci_check.cli", "syntax", "--quiet"],
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
                 check=False,
                 cwd=tmpdir,
                 env=pythonpath_env,
             )
 
             assert result.returncode == 0
+            stdout = result.stdout or ""
             # 安靜模式不應該有輸出（成功時）
-            assert len(result.stdout) == 0 or "Checking" not in result.stdout
+            assert len(stdout) == 0 or "Checking" not in stdout

@@ -24,6 +24,8 @@ class TestIntegration:
             [sys.executable, "-m", "pyci_check.cli", "syntax"],
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             check=False,
             cwd=str(temp_project),
             env=env,
@@ -44,13 +46,15 @@ class TestIntegration:
             [sys.executable, "-m", "pyci_check.cli", "syntax"],
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             check=False,
             cwd=str(temp_dir),
             env=env,
         )
 
         assert result.returncode == 1
-        assert "SyntaxError" in result.stdout or "SyntaxError" in result.stderr
+        assert "SyntaxError" in (result.stdout or "") or "SyntaxError" in (result.stderr or "")
 
     def test_quiet_mode_no_output(self, project_root, temp_project):
         """測試安靜模式沒有輸出."""
@@ -62,14 +66,17 @@ class TestIntegration:
             [sys.executable, "-m", "pyci_check.cli", "syntax", "--quiet"],
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             check=False,
             cwd=str(temp_project),
             env=env,
         )
 
         assert result.returncode == 0
+        stdout = result.stdout or ""
         # 安靜模式成功時應該沒有輸出
-        assert len(result.stdout) == 0 or "Checking" not in result.stdout
+        assert len(stdout) == 0 or "Checking" not in stdout
 
     def test_help_command(self, project_root):
         """測試 --help 命令."""
@@ -81,13 +88,16 @@ class TestIntegration:
             [sys.executable, "-m", "pyci_check.cli", "--help"],
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             check=False,
             env=env,
         )
 
         assert result.returncode == 0
-        assert "pyci-check" in result.stdout
-        assert "syntax" in result.stdout
+        stdout = result.stdout or ""
+        assert "pyci-check" in stdout
+        assert "syntax" in stdout
 
     def test_parallel_file_checking(self, project_root, temp_dir):
         """測試並行檢查多個檔案."""
@@ -103,6 +113,8 @@ class TestIntegration:
             [sys.executable, "-m", "pyci_check.cli", "syntax"],
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             check=False,
             cwd=str(temp_dir),
             env=env,
@@ -126,6 +138,8 @@ class TestIntegration:
             [sys.executable, "-m", "pyci_check.cli", "syntax"],
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             check=False,
             cwd=str(temp_dir),
             env=env,
@@ -156,6 +170,8 @@ exclude = [".venv"]
             [sys.executable, "-m", "pyci_check.cli", "syntax"],
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             check=False,
             cwd=str(temp_dir),
             env=env,
@@ -183,6 +199,8 @@ exclude = [".venv"]
             [sys.executable, "-m", "pyci_check.cli", "syntax", "--quiet"],
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             check=False,
             cwd=str(temp_dir),
             env=env,
@@ -208,6 +226,8 @@ exclude = [".venv"]
             [sys.executable, "-m", "pyci_check.cli", "syntax"],
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             check=False,
             cwd=str(temp_dir),
             env=env,
@@ -227,6 +247,8 @@ exclude = [".venv"]
             [sys.executable, "-m", "pyci_check.cli", "syntax"],
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             check=False,
             cwd=str(temp_dir),
             env=env,
@@ -234,4 +256,4 @@ exclude = [".venv"]
 
         assert result.returncode == 1
         # 錯誤報告應包含檔案名稱
-        assert "error.py" in result.stdout or "error.py" in result.stderr
+        assert "error.py" in (result.stdout or "") or "error.py" in (result.stderr or "")
