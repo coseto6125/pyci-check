@@ -51,26 +51,26 @@ We welcome feature requests! Please create an issue with:
 4. **Run tests**
    ```bash
    # Run all tests
-   pytest
-   
+   uv run pytest
+
    # Run specific test categories
-   pytest tests/test_syntax.py
-   pytest tests/test_imports.py
-   
+   uv run pytest tests/test_syntax.py
+   uv run pytest tests/test_imports.py
+
    # Run with coverage
-   pytest --cov=pyci_check
+   uv run pytest --cov=pyci_check
    ```
 
 5. **Run code quality checks**
    ```bash
    # Syntax and import checks
-   pyci-check check .
-   
+   uv run pyci-check check .
+
    # Linting
-   ruff check .
-   
+   uv run ruff check .
+
    # Formatting
-   ruff format .
+   uv run ruff format .
    ```
 
 6. **Commit your changes**
@@ -125,8 +125,8 @@ We welcome feature requests! Please create an issue with:
 
 3. **Install in development mode**
    ```bash
-   # Using uv (recommended)
-   uv pip install -e ".[dev]"
+   # Using uv (recommended - faster and more reliable)
+   uv sync --extra dev
 
    # Or using pip
    pip install -e ".[dev]"
@@ -136,16 +136,13 @@ We welcome feature requests! Please create an issue with:
 
 ```bash
 # All tests
-pytest
+uv run pytest
 
 # Specific test file
-pytest tests/test_syntax.py
+uv run pytest tests/test_syntax.py
 
 # With coverage report
-pytest --cov=pyci_check --cov-report=html
-
-# Watch mode (requires pytest-watch)
-ptw
+uv run pytest --cov=pyci_check --cov-report=html
 ```
 
 ### Code Style
@@ -157,10 +154,10 @@ We use:
 
 Before submitting a PR, ensure:
 ```bash
-pyci-check check .
-ruff check .
-ruff format .
-pytest
+uv run pyci-check check .
+uv run ruff check .
+uv run ruff format .
+uv run pytest
 ```
 
 ## Project Structure
