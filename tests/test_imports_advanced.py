@@ -1,11 +1,5 @@
 """Import 檢查進階測試."""
 
-import os
-import tempfile
-from pathlib import Path
-
-import pytest
-
 from pyci_check.imports import (
     check_missing_modules,
     check_module_importable_static,
@@ -54,7 +48,7 @@ class TestImportAdvanced:
 
     def test_extract_from_all_files(self, temp_project):
         """測試從所有檔案提取 import."""
-        imports, relative_imports = extract_from_all_files(str(temp_project))
+        imports, _relative_imports = extract_from_all_files(str(temp_project))
 
         # temp_project 包含 src/main.py 和 tests/test_main.py
         assert len(imports) > 0
