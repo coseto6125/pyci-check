@@ -31,13 +31,13 @@ jobs:
       - name: Run Ruff linter
         run: |
           echo "::group::Ruff Linting"
-          ruff check . --output-format=github
+          ruff check . --config pyproject.toml --output-format=github
           echo "::endgroup::"
 
       - name: Run Ruff formatter check
         run: |
           echo "::group::Ruff Formatting"
-          ruff format --check .
+          ruff format --check . --config pyproject.toml
           echo "::endgroup::"
 
   # ==================== Self Check ====================
