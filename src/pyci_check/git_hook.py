@@ -33,7 +33,7 @@ def get_staged_python_files() -> list[str]:
     """取得 staged 的 Python 檔案."""
     try:
         result = subprocess.run(
-            ["git", "diff", "--cached", "--name-only", "--diff-filter=ACM"],
+            ["/usr/bin/git", "diff", "--cached", "--name-only", "--diff-filter=ACM"],  # noqa: S603
             capture_output=True,
             text=True,
             check=True,

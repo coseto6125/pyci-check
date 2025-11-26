@@ -1,8 +1,16 @@
 """CLI 入口點."""
 
 import argparse
+import io
 import os
 import sys
+
+# 確保 Windows 上的 stdout 使用 UTF-8 編碼
+if sys.platform == "win32":
+    if sys.stdout.encoding != "utf-8":
+        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
+    if sys.stderr.encoding != "utf-8":
+        sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
 
 from pyci_check.git_hook import install_hooks, uninstall_hooks
 from pyci_check.i18n import t
@@ -13,6 +21,7 @@ from pyci_check.imports import (
     get_venv_from_pyproject,
 )
 from pyci_check.syntax import check_files_parallel, find_python_files
+from pyci_check.utils import safe_relpath
 
 
 def check_syntax(args: argparse.Namespace) -> int:
@@ -129,7 +138,7 @@ def check_imports(args: argparse.Namespace) -> int:
     if missing_modules:
         for module, import_list in sorted(missing_modules.items()):
             for import_info in import_list:
-                rel_path = os.path.relpath(import_info["file"], project_path)
+                rel_path = safe_relpath(import_info["file"], project_path)
                 error_msg = import_info.get("error", "Module not found")
                 print(t("imports.module_failed", module))
                 print(t("imports.file", rel_path, import_info["line"]))

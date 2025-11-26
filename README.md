@@ -28,6 +28,10 @@ pip install pyci-check
 Or with uv (recommended):
 
 ```bash
+# Preferred (adds to pyproject.toml)
+uv add pyci-check
+
+# Or direct install
 uv pip install pyci-check
 ```
 

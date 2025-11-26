@@ -53,3 +53,25 @@ def should_exclude_path(file_path: str, exclude_dirs: frozenset[str]) -> bool:
     # 將路徑分割為各個部分
     path_parts = set(file_path.replace("\\", "/").split("/"))
     return bool(path_parts & exclude_dirs)
+
+
+def safe_relpath(path: str, start: str) -> str:
+    """
+    安全的相對路徑計算,處理跨磁碟機的情況.
+
+    在 Windows 上,如果 path 和 start 在不同磁碟機上,
+    os.path.relpath() 會拋出 ValueError。
+    此函式在這種情況下返回絕對路徑。
+
+    Args:
+        path: 目標路徑
+        start: 起始路徑
+
+    Returns:
+        相對路徑,如果無法計算則返回絕對路徑
+    """
+    try:
+        return os.path.relpath(path, start)
+    except ValueError:
+        # 跨磁碟機時返回絕對路徑
+        return os.path.abspath(path)

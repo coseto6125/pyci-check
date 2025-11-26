@@ -18,9 +18,13 @@ Fast Python syntax and import checker designed for CI/CD and Git hooks.
 pip install pyci-check
 ```
 
-Or with uv:
+Or with uv (recommended):
 
 ```bash
+# Preferred (adds to pyproject.toml)
+uv add pyci-check
+
+# Or direct install
 uv pip install pyci-check
 ```
 

@@ -7,7 +7,7 @@ import sys
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
-from pyci_check.utils import calculate_optimal_workers, get_exclude_dirs_set, should_exclude_path
+from pyci_check.utils import calculate_optimal_workers, get_exclude_dirs_set, safe_relpath, should_exclude_path
 
 
 def _has_symlink_in_path(file_path: str, base_dir: str) -> bool:

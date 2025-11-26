@@ -28,13 +28,11 @@ pip install pyci-check
 或使用 uv（推薦）：
 
 ```bash
-uv pip install pyci-check
-```
-
-或：
-
-```bash
+# 首选（会加入 pyproject.toml）
 uv add pyci-check
+
+# 或直接安装
+uv pip install pyci-check
 ```
 
 ## 快速开始
