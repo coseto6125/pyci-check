@@ -106,7 +106,7 @@ jobs:
           python-version: ${{ matrix.python-version }}
 
       - name: Install dependencies
-        run: uv sync --dev
+        run: uv sync --extra dev
 
       - name: Run unit tests
         run: |
@@ -139,7 +139,7 @@ jobs:
           python-version: "3.13"
 
       - name: Install dependencies
-        run: uv sync --dev
+        run: uv sync --extra dev
 
       - name: Run syntax tests
         run: |
@@ -164,7 +164,7 @@ jobs:
           python-version: "3.13"
 
       - name: Install dependencies
-        run: uv sync --dev
+        run: uv sync --extra dev
 
       - name: Run import tests
         run: |
@@ -189,7 +189,7 @@ jobs:
           python-version: "3.13"
 
       - name: Install dependencies
-        run: uv sync --dev
+        run: uv sync --extra dev
 
       - name: Initialize Git repository
         run: |
@@ -220,7 +220,7 @@ jobs:
           python-version: "3.13"
 
       - name: Install dependencies
-        run: uv sync --dev
+        run: uv sync --extra dev
 
       - name: Run CLI tests
         run: |
@@ -245,7 +245,7 @@ jobs:
           python-version: "3.13"
 
       - name: Install dependencies
-        run: uv sync --dev
+        run: uv sync --extra dev
 
       - name: Run i18n tests
         run: |
@@ -270,7 +270,7 @@ jobs:
           python-version: "3.13"
 
       - name: Install dependencies
-        run: uv sync --dev
+        run: uv sync --extra dev
 
       - name: Run utils tests
         run: |
@@ -295,7 +295,7 @@ jobs:
           python-version: "3.13"
 
       - name: Install dependencies
-        run: uv sync --dev
+        run: uv sync --extra dev
 
       - name: Run integration tests
         run: |
