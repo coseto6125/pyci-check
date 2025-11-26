@@ -81,7 +81,7 @@ class TestI18n:
         with tempfile.TemporaryDirectory() as tmpdir:
             # 創建 pyproject.toml
             pyproject_path = Path(tmpdir) / "pyproject.toml"
-            pyproject_path.write_text("[project]\nname = 'test'\n")
+            pyproject_path.write_text("[project]\nname = 'test'\n", encoding="utf-8")
 
             # 清除 cache
             _find_pyproject_toml.cache_clear()
@@ -127,7 +127,7 @@ class TestI18n:
 [tool.pyci-check]
 language = "zh_CN"
 """
-            pyproject_path.write_text(pyproject_content)
+            pyproject_path.write_text(pyproject_content, encoding="utf-8")
 
             # 清除 cache
             _find_pyproject_toml.cache_clear()

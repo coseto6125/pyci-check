@@ -34,7 +34,7 @@ class TestIntegration:
     def test_full_workflow_with_syntax_error(self, project_root, temp_dir):
         """測試檢測語法錯誤的完整流程."""
         # 創建語法錯誤的檔案
-        (temp_dir / "error.py").write_text("def incomplete(")
+        (temp_dir / "error.py").write_text("def incomplete(", encoding="utf-8")
 
         pythonpath = str(project_root / "src")
         env = os.environ.copy()
@@ -93,7 +93,7 @@ class TestIntegration:
         """測試並行檢查多個檔案."""
         # 創建多個檔案
         for i in range(20):
-            (temp_dir / f"file{i}.py").write_text(f"print('file {i}')")
+            (temp_dir / f"file{i}.py").write_text(f"print('file {i}')", encoding="utf-8")
 
         pythonpath = str(project_root / "src")
         env = os.environ.copy()
@@ -113,10 +113,10 @@ class TestIntegration:
     def test_mixed_valid_and_invalid_files(self, project_root, temp_dir):
         """測試混合有效和無效的檔案."""
         # 創建有效檔案
-        (temp_dir / "valid.py").write_text("import os\nprint('ok')")
+        (temp_dir / "valid.py").write_text("import os\nprint('ok')", encoding="utf-8")
 
         # 創建無效檔案
-        (temp_dir / "invalid.py").write_text("print('unclosed")
+        (temp_dir / "invalid.py").write_text("print('unclosed", encoding="utf-8")
 
         pythonpath = str(project_root / "src")
         env = os.environ.copy()
@@ -138,8 +138,8 @@ class TestIntegration:
         # 創建目錄結構
         (temp_dir / "src").mkdir()
         (temp_dir / ".venv").mkdir()
-        (temp_dir / "src" / "main.py").write_text("import os")
-        (temp_dir / ".venv" / "bad.py").write_text("print('unclosed")
+        (temp_dir / "src" / "main.py").write_text("import os", encoding="utf-8")
+        (temp_dir / ".venv" / "bad.py").write_text("print('unclosed", encoding="utf-8")
 
         # 創建 pyproject.toml 排除 .venv
         (temp_dir / "pyproject.toml").write_text("""
@@ -217,7 +217,7 @@ exclude = [".venv"]
 
     def test_error_reporting_format(self, project_root, temp_dir):
         """測試錯誤報告格式."""
-        (temp_dir / "error.py").write_text("def test(\npass")
+        (temp_dir / "error.py").write_text("def test(\npass", encoding="utf-8")
 
         pythonpath = str(project_root / "src")
         env = os.environ.copy()

@@ -127,7 +127,7 @@ from ..utils import helper
         with tempfile.TemporaryDirectory() as tmpdir:
             # 創建 pyproject.toml
             pyproject_path = Path(tmpdir) / "pyproject.toml"
-            pyproject_path.write_text("[tool.pyci-check]\nlanguage = 'en'\n")
+            pyproject_path.write_text("[tool.pyci-check]\nlanguage = 'en'\n", encoding="utf-8")
 
             # 清除 cache
             find_pyproject_toml.cache_clear()
@@ -148,7 +148,7 @@ src = ["src", "tests"]
 exclude = [".venv", "build"]
 extend-exclude = ["*.egg-info"]
 """
-            pyproject_path.write_text(pyproject_content)
+            pyproject_path.write_text(pyproject_content, encoding="utf-8")
 
             # 清除 cache
             get_ruff_config_from_pyproject.cache_clear()

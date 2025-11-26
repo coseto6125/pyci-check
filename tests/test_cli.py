@@ -31,7 +31,7 @@ class TestCLI:
         with tempfile.TemporaryDirectory() as tmpdir:
             # 創建有效的 Python 檔案
             test_file = Path(tmpdir) / "test.py"
-            test_file.write_text("print('hello')\n")
+            test_file.write_text("print('hello')\n", encoding="utf-8")
 
             import os
 
@@ -55,7 +55,7 @@ class TestCLI:
         with tempfile.TemporaryDirectory() as tmpdir:
             # 創建語法錯誤的檔案
             test_file = Path(tmpdir) / "test.py"
-            test_file.write_text("print('unclosed\n")
+            test_file.write_text("print('unclosed\n", encoding="utf-8")
 
             result = subprocess.run(
                 [sys.executable, "-m", "pyci_check.cli", "syntax"],
@@ -74,7 +74,7 @@ class TestCLI:
         with tempfile.TemporaryDirectory() as tmpdir:
             # 創建有效的 Python 檔案
             test_file = Path(tmpdir) / "test.py"
-            test_file.write_text("print('hello')\n")
+            test_file.write_text("print('hello')\n", encoding="utf-8")
 
             result = subprocess.run(
                 [sys.executable, "-m", "pyci_check.cli", "syntax", "--quiet"],

@@ -24,7 +24,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from functools import lru_cache
 
 from pyci_check.i18n import t
-from pyci_check.utils import calculate_optimal_workers
+from pyci_check.utils import calculate_optimal_workers, safe_relpath
 
 # 效能優化: 預先定義常數避免重複創建
 SENSITIVE_ENV_PREFIXES = frozenset({"AWS", "SECRET", "TOKEN", "KEY", "PASSWORD"})
@@ -628,7 +628,7 @@ def print_results(
                 file_path = import_info["file"]
                 error_msg = import_info.get("error", "Module not found")
                 if not args.quiet:
-                    rel_path = os.path.relpath(file_path, args.project_path)
+                    rel_path = safe_relpath(file_path, args.project_path)
                     print(t("imports.standalone.load_failed", module))
                     print(t("imports.standalone.file_line", rel_path, import_info["line"]))
                     print(t("imports.standalone.statement", import_info["statement"]))

@@ -1,7 +1,10 @@
 """Pytest 配置和共用 fixtures."""
 
 import os
+import shutil
+import sys
 import tempfile
+import time
 from pathlib import Path
 
 import pytest
@@ -43,15 +46,30 @@ def clear_caches():
 @pytest.fixture
 def temp_dir():
     """創建臨時目錄."""
-    with tempfile.TemporaryDirectory() as tmpdir:
+    tmpdir = tempfile.mkdtemp()
+    try:
         yield Path(tmpdir)
+    finally:
+        # Windows 上需要重試刪除,因為可能有檔案被鎖定
+        if sys.platform == "win32":
+            for _ in range(3):
+                try:
+                    shutil.rmtree(tmpdir, ignore_errors=False)
+                    break
+                except (PermissionError, OSError):
+                    time.sleep(0.1)
+            else:
+                # 最後一次嘗試,忽略錯誤
+                shutil.rmtree(tmpdir, ignore_errors=True)
+        else:
+            shutil.rmtree(tmpdir, ignore_errors=True)
 
 
 @pytest.fixture
 def temp_python_file(temp_dir):
     """創建臨時 Python 檔案."""
     test_file = temp_dir / "test.py"
-    test_file.write_text("print('hello')\n")
+    test_file.write_text("print('hello')\n", encoding="utf-8")
     return test_file
 
 
@@ -65,11 +83,11 @@ def temp_project(temp_dir):
     (temp_dir / "build").mkdir()
 
     # 創建檔案
-    (temp_dir / "src" / "__init__.py").write_text("")
-    (temp_dir / "src" / "main.py").write_text("import os\nimport sys\n")
-    (temp_dir / "tests" / "test_main.py").write_text("import pytest\n")
-    (temp_dir / ".venv" / "test.py").write_text("# venv file")
-    (temp_dir / "build" / "test.py").write_text("# build file")
+    (temp_dir / "src" / "__init__.py").write_text("", encoding="utf-8")
+    (temp_dir / "src" / "main.py").write_text("import os\nimport sys\n", encoding="utf-8")
+    (temp_dir / "tests" / "test_main.py").write_text("import pytest\n", encoding="utf-8")
+    (temp_dir / ".venv" / "test.py").write_text("# venv file", encoding="utf-8")
+    (temp_dir / "build" / "test.py").write_text("# build file", encoding="utf-8")
 
     # 創建 pyproject.toml
     pyproject = temp_dir / "pyproject.toml"
@@ -80,7 +98,7 @@ language = "en"
 [tool.ruff]
 src = ["src", "tests"]
 exclude = [".venv", "build"]
-""")
+""", encoding="utf-8")
 
     return temp_dir
 

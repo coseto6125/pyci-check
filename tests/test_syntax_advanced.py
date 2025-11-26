@@ -55,7 +55,7 @@ class TestSyntaxAdvanced:
         """測試查找包含子目錄的 Python 檔案."""
         # 創建更多子目錄和檔案
         (temp_project / "src" / "subdir").mkdir()
-        (temp_project / "src" / "subdir" / "module.py").write_text("import os")
+        (temp_project / "src" / "subdir" / "module.py").write_text("import os", encoding="utf-8")
 
         files = find_python_files(str(temp_project))
 
@@ -74,8 +74,8 @@ class TestSyntaxAdvanced:
         # 創建檔案結構
         (temp_dir / "src").mkdir()
         (temp_dir / "custom_exclude").mkdir()
-        (temp_dir / "src" / "test.py").write_text("import os")
-        (temp_dir / "custom_exclude" / "test.py").write_text("import sys")
+        (temp_dir / "src" / "test.py").write_text("import os", encoding="utf-8")
+        (temp_dir / "custom_exclude" / "test.py").write_text("import sys", encoding="utf-8")
 
         files = find_python_files(str(temp_dir), exclude_dirs=["custom_exclude"])
 
@@ -87,16 +87,16 @@ class TestSyntaxAdvanced:
         """測試並行檢查混合結果（有效和無效檔案）."""
         # 創建多個檔案
         valid1 = temp_dir / "valid1.py"
-        valid1.write_text("import os\nprint('test1')")
+        valid1.write_text("import os\nprint('test1')", encoding="utf-8")
 
         valid2 = temp_dir / "valid2.py"
-        valid2.write_text("def func():\n    return True")
+        valid2.write_text("def func():\n    return True", encoding="utf-8")
 
         invalid1 = temp_dir / "invalid1.py"
-        invalid1.write_text("print('unclosed")
+        invalid1.write_text("print('unclosed", encoding="utf-8")
 
         invalid2 = temp_dir / "invalid2.py"
-        invalid2.write_text("def incomplete(")
+        invalid2.write_text("def incomplete(", encoding="utf-8")
 
         files = [str(valid1), str(valid2), str(invalid1), str(invalid2)]
         success_count, error_count, errors = check_files_parallel(files)
@@ -110,7 +110,7 @@ class TestSyntaxAdvanced:
         files = []
         for i in range(10):
             f = temp_dir / f"file{i}.py"
-            f.write_text(f"print('file {i}')")
+            f.write_text(f"print('file {i}')", encoding="utf-8")
             files.append(str(f))
 
         success_count, error_count, errors = check_files_parallel(files)
@@ -124,7 +124,7 @@ class TestSyntaxAdvanced:
         files = []
         for i in range(5):
             f = temp_dir / f"invalid{i}.py"
-            f.write_text("print('unclosed")
+            f.write_text("print('unclosed", encoding="utf-8")
             files.append(str(f))
 
         success_count, error_count, errors = check_files_parallel(files)
@@ -164,7 +164,7 @@ if __name__ == "__main__":
     main()
 '''
         test_file = temp_dir / "complex.py"
-        test_file.write_text(complex_code)
+        test_file.write_text(complex_code, encoding="utf-8")
 
         is_valid, error = check_file_syntax(str(test_file))
 
@@ -181,7 +181,7 @@ print(f"Value: {value:>10}")
 print(f"Expression: {2 + 2}")
 '''
         test_file = temp_dir / "fstring.py"
-        test_file.write_text(code)
+        test_file.write_text(code, encoding="utf-8")
 
         is_valid, error = check_file_syntax(str(test_file))
 
@@ -198,7 +198,7 @@ while (line := input()) != "quit":
     print(f"You entered: {line}")
 '''
         test_file = temp_dir / "walrus.py"
-        test_file.write_text(code)
+        test_file.write_text(code, encoding="utf-8")
 
         is_valid, error = check_file_syntax(str(test_file))
 
@@ -220,7 +220,7 @@ def http_error(status):
             return "Something's wrong"
 '''
         test_file = temp_dir / "match.py"
-        test_file.write_text(code)
+        test_file.write_text(code, encoding="utf-8")
 
         is_valid, error = check_file_syntax(str(test_file))
 

@@ -81,7 +81,7 @@ class TestGitHooks:
 # My custom hook
 echo "Running my checks..."
 """
-        hook_path.write_text(existing_content)
+        hook_path.write_text(existing_content, encoding="utf-8")
 
         hook_content = "echo 'pyci-check'"
 
@@ -111,7 +111,7 @@ echo 'old content'
 
 echo 'other content'
 """
-        hook_path.write_text(initial_content)
+        hook_path.write_text(initial_content, encoding="utf-8")
 
         new_hook_content = "echo 'new content'"
 
@@ -145,7 +145,7 @@ echo 'pyci-check content'
 
 echo "More custom logic"
 """
-        hook_path.write_text(content_with_block)
+        hook_path.write_text(content_with_block, encoding="utf-8")
 
         result = remove_pyci_check_block(str(hook_path))
 
@@ -173,7 +173,7 @@ set -e
 echo 'pyci-check content'
 {PYCI_CHECK_END_MARKER}
 """
-        hook_path.write_text(content_only_pyci)
+        hook_path.write_text(content_only_pyci, encoding="utf-8")
 
         result = remove_pyci_check_block(str(hook_path))
 
@@ -185,7 +185,7 @@ echo 'pyci-check content'
         hook_path = temp_dir / "pre-commit"
 
         # 建立不包含 pyci-check 區塊的 hook
-        hook_path.write_text("#!/usr/bin/env bash\necho 'test'")
+        hook_path.write_text("#!/usr/bin/env bash\necho 'test'", encoding="utf-8")
 
         result = remove_pyci_check_block(str(hook_path))
 
@@ -193,10 +193,16 @@ echo 'pyci-check content'
 
     def test_hook_file_executable(self, temp_dir):
         """測試 hook 檔案有執行權限."""
+        import sys
+
         hook_path = temp_dir / "pre-commit"
 
         hook_content = "echo 'test'"
         add_or_update_hook_content(str(hook_path), hook_content)
+
+        # Windows 上沒有執行權限的概念,跳過此測試
+        if sys.platform == "win32":
+            pytest.skip("Windows does not support execute permissions")
 
         # 檢查檔案有執行權限
         assert os.access(hook_path, os.X_OK)

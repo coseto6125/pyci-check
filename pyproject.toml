@@ -30,6 +30,13 @@ classifiers = [
 keywords = ["syntax-checker", "import-checker", "ci-cd", "git-hooks", "linter", "quality-assurance"]
 dependencies = []
 
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-cov>=4.1.0",
+    "ruff>=0.8.0",
+]
+
 [project.urls]
 "Homepage" = "https://github.com/coseto6125/pyci-check"
 "Documentation" = "https://github.com/coseto6125/pyci-check/blob/main/docs/en/USAGE.md"
@@ -72,7 +79,8 @@ checks = ["syntax", "imports"]
 # 排除設定
 # --------------------------------------------
 # 排除不需要檢查的目錄和檔案
-# 會自動繼承 [tool.ruff] 的 exclude 設定
+# 注意: pyci-check 會先讀取這個設定,如果為空則繼承 [tool.ruff] 的 exclude
+# 但我們希望 import 檢查包含 tests/,所以這裡明確列出要排除的目錄
 exclude = [
     ".venv",
     "venv",
@@ -83,6 +91,9 @@ exclude = [
     "dist",
     "*.egg-info",
     "node_modules",
+    "docs",
+    "examples",
+    "streamlit",
 ]
 
 # --------------------------------------------
@@ -132,7 +143,6 @@ exclude = [
   "dist",
   "node_modules",
   "mypy.ini",
-  "tests/",
   "docs/",
   "examples/",
   "streamlit",

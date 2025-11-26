@@ -132,11 +132,11 @@ def check_files_parallel(python_files: list[str]) -> tuple[int, int, list]:
                 if is_valid:
                     success_count += 1
                 else:
-                    relative_path = os.path.relpath(file_path, current_dir)
+                    relative_path = safe_relpath(file_path, current_dir)
                     errors.append((relative_path, error_msg))
 
             except Exception as exc:
-                relative_path = os.path.relpath(file_path, current_dir)
+                relative_path = safe_relpath(file_path, current_dir)
                 errors.append((relative_path, f"Exception: {exc}"))
 
     error_count = len(errors)

@@ -33,7 +33,7 @@ def get_staged_python_files() -> list[str]:
     """取得 staged 的 Python 檔案."""
     try:
         result = subprocess.run(
-            ["/usr/bin/git", "diff", "--cached", "--name-only", "--diff-filter=ACM"],  # noqa: S603
+            ["/usr/bin/git", "diff", "--cached", "--name-only", "--diff-filter=ACM"],
             capture_output=True,
             text=True,
             check=True,
@@ -47,8 +47,8 @@ def get_staged_python_files() -> list[str]:
 def get_changed_python_files(remote_branch: str = "origin/main") -> list[str]:
     """取得相對於遠端分支變更的 Python 檔案."""
     try:
-        result = subprocess.run(
-            ["git", "diff", "--name-only", f"{remote_branch}...HEAD"],
+        result = subprocess.run(  # noqa: S603
+            ["/usr/bin/git", "diff", "--name-only", f"{remote_branch}...HEAD"],
             capture_output=True,
             text=True,
             check=False,
@@ -56,7 +56,7 @@ def get_changed_python_files(remote_branch: str = "origin/main") -> list[str]:
         if result.returncode != 0:
             # 如果 origin/main 不存在,嘗試其他分支
             result = subprocess.run(
-                ["git", "diff", "--name-only", "HEAD~1...HEAD"],
+                ["/usr/bin/git", "diff", "--name-only", "HEAD~1...HEAD"],
                 capture_output=True,
                 text=True,
                 check=True,
@@ -198,9 +198,11 @@ def install_hooks(hook_type: str = "pre-commit") -> int:
         pre_commit_path = os.path.join(hooks_dir, "pre-commit")
 
         if add_or_update_hook_content(pre_commit_path, PRE_COMMIT_HOOK_CONTENT):
-            if os.path.exists(pre_commit_path) and PYCI_CHECK_START_MARKER in open(pre_commit_path).read():
-                # 檢查是新增還是更新
-                print(t("hooks.install_success", "pre-commit", pre_commit_path))
+            if os.path.exists(pre_commit_path):
+                with open(pre_commit_path, encoding="utf-8") as f:
+                    if PYCI_CHECK_START_MARKER in f.read():
+                        # 檢查是新增還是更新
+                        print(t("hooks.install_success", "pre-commit", pre_commit_path))
             else:
                 print(t("hooks.install_success", "pre-commit", pre_commit_path))
         else:
