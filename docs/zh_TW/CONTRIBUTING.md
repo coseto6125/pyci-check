@@ -64,7 +64,7 @@
 5. **執行程式碼品質檢查**
    ```bash
    # 語法和 import 檢查
-   uv run pyci-check check .
+   uv run pyci-check check
 
    # Linting
    uv run ruff check .
@@ -154,7 +154,7 @@ uv run pytest --cov=pyci_check --cov-report=html
 
 提交 PR 前，請確保：
 ```bash
-uv run pyci-check check .
+uv run pyci-check check
 uv run ruff check .
 uv run ruff format .
 uv run pytest

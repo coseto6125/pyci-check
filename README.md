@@ -41,7 +41,7 @@ uv pip install pyci-check
 
 ```bash
 # Check entire project (syntax + static import analysis)
-pyci-check check .
+pyci-check check
 
 # Check syntax only
 pyci-check syntax
@@ -102,10 +102,10 @@ pyci-check uninstall-hooks
 
 ```bash
 # Check for relative imports
-pyci-check check . --check-relative
+pyci-check check --check-relative
 
 # Stop immediately on error
-pyci-check check . --fail-fast
+pyci-check check --fail-fast
 
 # Set import timeout (seconds)
 pyci-check imports --timeout 60
@@ -115,7 +115,7 @@ pyci-check imports --venv .
 pyci-check imports --venv /path/to/project
 
 # Quiet mode with full check
-pyci-check check . --quiet --i-understand-this-will-execute-code
+pyci-check check --quiet --i-understand-this-will-execute-code
 ```
 
 ## Important Safety Notes
@@ -172,14 +172,14 @@ extend-exclude = ["experiments/", "*.egg-info"]
 - name: Check Python syntax and imports
   run: |
     pip install pyci-check
-    pyci-check check .  # Syntax + import static analysis
+    pyci-check check  # Syntax + import static analysis
 ```
 
 ### Using with ruff
 
 ```bash
 # Recommended check order
-pyci-check check .      # Syntax + import checking
+pyci-check check      # Syntax + import checking
 ruff check --fix        # Lint + auto-fix
 ruff format             # Format
 ```

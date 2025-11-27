@@ -11,6 +11,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Additional test coverage
 - Performance benchmarks
 
+## [0.1.3] - 2025-11-27
+
+### Changed
+- **Documentation**: Update all examples to remove unnecessary `.` parameter
+  - `pyci-check check` now the recommended way instead of `pyci-check check .`
+  - Parameter `.` is still supported but not required (current directory is default)
+  - Updated all README files, documentation, and CONTRIBUTING.md
+
 ## [0.1.2] - 2025-11-27
 
 ### Fixed
@@ -78,7 +86,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Automated release workflow
   - PyPI publishing support (Trusted Publisher)
 
-[Unreleased]: https://github.com/coseto6125/pyci-check/compare/v0.1.2...HEAD
+[Unreleased]: https://github.com/coseto6125/pyci-check/compare/v0.1.3...HEAD
+[0.1.3]: https://github.com/coseto6125/pyci-check/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/coseto6125/pyci-check/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/coseto6125/pyci-check/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/coseto6125/pyci-check/releases/tag/v0.1.0

@@ -21,7 +21,7 @@ Execute all checks (syntax + import static analysis).
 
 ```bash
 # Check entire project
-pyci-check check .
+pyci-check check
 
 # Check specific directories
 pyci-check check src/ tests/
@@ -129,7 +129,7 @@ These options work with all commands:
 Reduce output, only show errors.
 
 ```bash
-pyci-check check . --quiet
+pyci-check check --quiet
 ```
 
 #### `--fail-fast`
@@ -137,7 +137,7 @@ pyci-check check . --quiet
 Stop checking immediately on first error.
 
 ```bash
-pyci-check check . --fail-fast
+pyci-check check --fail-fast
 ```
 
 **Use Cases**:
@@ -162,7 +162,7 @@ pyci-check imports --timeout 60
 Forbid relative imports, treat them as errors.
 
 ```bash
-pyci-check check . --check-relative
+pyci-check check --check-relative
 ```
 
 **Example Errors**:
@@ -199,7 +199,7 @@ Execute dynamic import checking (actually loads modules).
 
 ```bash
 pyci-check imports --i-understand-this-will-execute-code
-pyci-check check . --i-understand-this-will-execute-code
+pyci-check check --i-understand-this-will-execute-code
 ```
 
 **Safety Warning**:
@@ -364,7 +364,7 @@ jobs:
 
 ```bash
 # Recommended check order
-pyci-check check .      # Syntax + import checking
+pyci-check check      # Syntax + import checking
 ruff check --fix        # Lint + auto-fix
 ruff format             # Format
 ```

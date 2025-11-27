@@ -41,7 +41,7 @@ uv pip install pyci-check
 
 ```bash
 # 检查整个专案（语法 + import 静态分析）
-pyci-check check .
+pyci-check check
 
 # 仅检查语法
 pyci-check syntax
@@ -102,10 +102,10 @@ pyci-check uninstall-hooks
 
 ```bash
 # 检查相对导入
-pyci-check check . --check-relative
+pyci-check check --check-relative
 
 # 发现错误立即停止
-pyci-check check . --fail-fast
+pyci-check check --fail-fast
 
 # 设定 import 超时（秒）
 pyci-check imports --timeout 60
@@ -115,7 +115,7 @@ pyci-check imports --venv .
 pyci-check imports --venv /path/to/project
 
 # 安静模式执行完整检查
-pyci-check check . --quiet --i-understand-this-will-execute-code
+pyci-check check --quiet --i-understand-this-will-execute-code
 ```
 
 ## 重要安全提醒
@@ -172,14 +172,14 @@ extend-exclude = ["experiments/", "*.egg-info"]
 - name: 检查 Python 语法与 import
   run: |
     pip install pyci-check
-    pyci-check check .  # 语法 + import 静态分析
+    pyci-check check  # 语法 + import 静态分析
 ```
 
 ### 配合 ruff 使用
 
 ```bash
 # 建议的检查顺序
-pyci-check check .      # 语法 + import 检查
+pyci-check check      # 语法 + import 检查
 ruff check --fix        # Lint + 自动修復
 ruff format             # 格式化
 ```
