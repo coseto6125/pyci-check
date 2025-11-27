@@ -88,6 +88,7 @@ TRANSLATIONS = {
     "imports.standalone.mode": "Using subprocess parallel checking (actual import execution)",
     "imports.standalone.found_modules": "Found {} unique modules, starting check...",
     "imports.standalone.run_dynamic": "Running dynamic import check: {}",
+    "imports.standalone.dynamic_error": "[Error] Dynamic check failed: {}",
     # Import error messages
     "imports.error.find_spec_failed": "find_spec failed: {}",
     "imports.error.module_not_found": "Static analysis cannot find module: {}",
