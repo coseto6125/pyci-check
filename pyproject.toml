@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "pyci-check"
-version = "0.1.5"
+version = "0.1.6"
 description = "Fast Python syntax and import checker for CI/CD and Git hooks"
 readme = "README.pypi.md"
 authors = [
@@ -79,7 +79,12 @@ checks = ["syntax", "imports"]
 # 排除設定
 # --------------------------------------------
 # 排除不需要檢查的目錄和檔案
-# 注意: pyci-check 會先讀取這個設定,如果為空則繼承 [tool.ruff] 的 exclude
+# 合併規則:
+# - [tool.pyci-check].exclude
+# - [tool.pyci-check].extend-exclude  (新增,v0.1.6+)
+# - [tool.ruff].exclude
+# - [tool.ruff].extend-exclude
+#
 # 但我們希望 import 檢查包含 tests/,所以這裡明確列出要排除的目錄
 exclude = [
     ".venv",
@@ -95,6 +100,10 @@ exclude = [
     "examples",
     "streamlit",
 ]
+
+# 擴充排除設定 (v0.1.6+)
+# 與 exclude 合併,不會覆蓋基礎設定
+# extend-exclude = ["experiments/", "*.tmp"]
 
 # --------------------------------------------
 # Import 檢查設定

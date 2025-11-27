@@ -11,6 +11,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Additional test coverage
 - Performance benchmarks
 
+## [0.1.6] - 2025-11-27
+
+### Added
+- **Configuration**: Support `extend-exclude` in `[tool.pyci-check]` configuration
+  - Merges with `exclude` settings from both `[tool.pyci-check]` and `[tool.ruff]`
+  - Merge priority: pyci-check exclude → pyci-check extend-exclude → ruff exclude → ruff extend-exclude
+  - Allows more flexible exclusion patterns without overriding base configuration
+
+### Changed
+- **Error Display**: Error messages now always displayed even in quiet mode
+  - Import errors, syntax errors, and relative import warnings bypass `--quiet` flag
+  - Ensures critical issues are never silently hidden
+  - Only informational messages (statistics, progress) are suppressed in quiet mode
+
+### Fixed
+- **Error Handling**: Fix `total_errors` uninitialized warning in `print_results()`
+- **Type Safety**: Improve type checking in test cases for better code reliability
+
 ## [0.1.5] - 2025-11-27
 
 ### Fixed
@@ -114,7 +132,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Automated release workflow
   - PyPI publishing support (Trusted Publisher)
 
-[Unreleased]: https://github.com/coseto6125/pyci-check/compare/v0.1.5...HEAD
+[Unreleased]: https://github.com/coseto6125/pyci-check/compare/v0.1.6...HEAD
+[0.1.6]: https://github.com/coseto6125/pyci-check/compare/v0.1.5...v0.1.6
 [0.1.5]: https://github.com/coseto6125/pyci-check/compare/v0.1.4...v0.1.5
 [0.1.4]: https://github.com/coseto6125/pyci-check/compare/v0.1.3...v0.1.4
 [0.1.3]: https://github.com/coseto6125/pyci-check/compare/v0.1.2...v0.1.3
