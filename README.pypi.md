@@ -32,7 +32,7 @@ uv pip install pyci-check
 
 ```bash
 # Check entire project (syntax + import static analysis)
-pyci-check check .
+pyci-check check
 
 # Check syntax only
 pyci-check syntax
@@ -92,13 +92,13 @@ Full documentation available on GitHub:
 - name: Check Python syntax and imports
   run: |
     pip install pyci-check
-    pyci-check check .
+    pyci-check check
 ```
 
 ### With ruff
 
 ```bash
-pyci-check check .      # Syntax + import checking
+pyci-check check      # Syntax + import checking
 ruff check --fix        # Lint + auto-fix
 ruff format             # Format
 ```

@@ -95,6 +95,10 @@ def check_imports(args: argparse.Namespace) -> int:
             print(t("imports.pythonpath", ", ".join(src_dirs)))
         if venv_path:
             print(t("imports.venv", venv_path))
+        if ignore_dirs:
+            print(t("imports.exclude_dirs", ", ".join(sorted(ignore_dirs))))
+        if ignore_files:
+            print(t("imports.exclude_files", ", ".join(sorted(ignore_files))))
 
         # 顯示檢查模式
         if use_static:
@@ -136,6 +140,7 @@ def check_imports(args: argparse.Namespace) -> int:
     )
 
     if missing_modules:
+        total_errors = 0
         for module, import_list in sorted(missing_modules.items()):
             for import_info in import_list:
                 rel_path = safe_relpath(import_info["file"], project_path)
@@ -145,6 +150,14 @@ def check_imports(args: argparse.Namespace) -> int:
                 print(t("imports.statement", import_info["statement"]))
                 print(t("imports.reason", error_msg))
                 print()
+                total_errors += 1
+
+        # 顯示統計資訊
+        if not args.quiet:
+            print("=" * 60)
+            print(t("imports.summary.failed_modules", len(missing_modules)))
+            print(t("imports.summary.total_errors", total_errors))
+            print("=" * 60)
         return 1
 
     if not args.quiet:

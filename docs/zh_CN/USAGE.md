@@ -21,7 +21,7 @@
 
 ```bash
 # 检查整个专案
-pyci-check check .
+pyci-check check
 
 # 检查特定目录
 pyci-check check src/ tests/
@@ -129,7 +129,7 @@ pyci-check uninstall-hooks
 減少輸出讯息，仅显示错误。
 
 ```bash
-pyci-check check . --quiet
+pyci-check check --quiet
 ```
 
 #### `--fail-fast`
@@ -137,7 +137,7 @@ pyci-check check . --quiet
 发现第一个错误时立即停止检查。
 
 ```bash
-pyci-check check . --fail-fast
+pyci-check check --fail-fast
 ```
 
 **适用場景**:
@@ -162,7 +162,7 @@ pyci-check imports --timeout 60
 禁止相对导入，发现时视为错误。
 
 ```bash
-pyci-check check . --check-relative
+pyci-check check --check-relative
 ```
 
 **范例错误**:
@@ -199,7 +199,7 @@ pyci-check imports --venv venv
 
 ```bash
 pyci-check imports --i-understand-this-will-execute-code
-pyci-check check . --i-understand-this-will-execute-code
+pyci-check check --i-understand-this-will-execute-code
 ```
 
 **安全提醒**:
@@ -364,7 +364,7 @@ jobs:
 
 ```bash
 # 建议的检查顺序
-pyci-check check .      # 语法 + import 检查
+pyci-check check      # 语法 + import 检查
 ruff check --fix        # Lint + 自动修復
 ruff format             # 格式化
 ```

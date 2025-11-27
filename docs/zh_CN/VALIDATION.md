@@ -227,7 +227,7 @@ src/example.py:1: import numpy
 ### 啟用方式
 
 ```bash
-pyci-check check . --check-relative
+pyci-check check --check-relative
 ```
 
 或在 `pyproject.toml` 中设定：
@@ -335,8 +335,8 @@ src/main.py:5: import broken_module
 | 语法检查 | `pyci-check syntax` | ❌ 否 | ⚡ 快 | pre-commit, CI/CD |
 | Import 静态 | `pyci-check imports` | ❌ 否 | ⚡ 快 | 日常开发, pre-commit |
 | Import 动态 | `pyci-check imports --i-understand-this-will-execute-code` | ✅ 是 | 🐢 慢 | CI/CD, 发布前 |
-| 完整检查（静态） | `pyci-check check .` | ❌ 否 | ⚡ 快 | 日常开发 |
-| 完整检查（动态） | `pyci-check check . --i-understand-this-will-execute-code` | ✅ 是 | 🐢 慢 | CI/CD |
+| 完整检查（静态） | `pyci-check check` | ❌ 否 | ⚡ 快 | 日常开发 |
+| 完整检查（动态） | `pyci-check check --i-understand-this-will-execute-code` | ✅ 是 | 🐢 慢 | CI/CD |
 
 ## 最佳实踐
 
@@ -344,7 +344,7 @@ src/main.py:5: import broken_module
 
 ```bash
 # 快速检查（语法 + import 静态分析）
-pyci-check check .
+pyci-check check
 ```
 
 ### Git Hooks
@@ -354,21 +354,21 @@ pyci-check check .
 pyci-check syntax
 
 # pre-push: 可加入 import 静态分析
-pyci-check check .
+pyci-check check
 ```
 
 ### CI/CD
 
 ```bash
 # 完整检查（包含动态 import）
-pyci-check check . --i-understand-this-will-execute-code
+pyci-check check --i-understand-this-will-execute-code
 ```
 
 ### 发布前
 
 ```bash
 # 完整检查 + 其他工具
-pyci-check check . --i-understand-this-will-execute-code
+pyci-check check --i-understand-this-will-execute-code
 mypy .
 ruff check .
 pytest

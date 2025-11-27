@@ -227,7 +227,7 @@ When using the `--check-relative` option, pyci-check will forbid relative import
 ### How to Enable
 
 ```bash
-pyci-check check . --check-relative
+pyci-check check --check-relative
 ```
 
 Or configure in `pyproject.toml`:
@@ -335,8 +335,8 @@ src/main.py:5: import broken_module
 | Syntax Check | `pyci-check syntax` | ❌ No | ⚡ Fast | pre-commit, CI/CD |
 | Import Static | `pyci-check imports` | ❌ No | ⚡ Fast | Daily dev, pre-commit |
 | Import Dynamic | `pyci-check imports --i-understand-this-will-execute-code` | ✅ Yes | 🐢 Slow | CI/CD, pre-release |
-| Full Check (Static) | `pyci-check check .` | ❌ No | ⚡ Fast | Daily development |
-| Full Check (Dynamic) | `pyci-check check . --i-understand-this-will-execute-code` | ✅ Yes | 🐢 Slow | CI/CD |
+| Full Check (Static) | `pyci-check check` | ❌ No | ⚡ Fast | Daily development |
+| Full Check (Dynamic) | `pyci-check check --i-understand-this-will-execute-code` | ✅ Yes | 🐢 Slow | CI/CD |
 
 ## Best Practices
 
@@ -344,7 +344,7 @@ src/main.py:5: import broken_module
 
 ```bash
 # Quick check (syntax + import static)
-pyci-check check .
+pyci-check check
 ```
 
 ### Git Hooks
@@ -354,21 +354,21 @@ pyci-check check .
 pyci-check syntax
 
 # pre-push: Can add import static
-pyci-check check .
+pyci-check check
 ```
 
 ### CI/CD
 
 ```bash
 # Full check (including dynamic import)
-pyci-check check . --i-understand-this-will-execute-code
+pyci-check check --i-understand-this-will-execute-code
 ```
 
 ### Before Release
 
 ```bash
 # Full check + other tools
-pyci-check check . --i-understand-this-will-execute-code
+pyci-check check --i-understand-this-will-execute-code
 mypy .
 ruff check .
 pytest

@@ -21,7 +21,7 @@
 
 ```bash
 # 檢查整個專案
-pyci-check check .
+pyci-check check
 
 # 檢查特定目錄
 pyci-check check src/ tests/
@@ -129,7 +129,7 @@ pyci-check uninstall-hooks
 減少輸出訊息，僅顯示錯誤。
 
 ```bash
-pyci-check check . --quiet
+pyci-check check --quiet
 ```
 
 #### `--fail-fast`
@@ -137,7 +137,7 @@ pyci-check check . --quiet
 發現第一個錯誤時立即停止檢查。
 
 ```bash
-pyci-check check . --fail-fast
+pyci-check check --fail-fast
 ```
 
 **適用場景**:
@@ -162,7 +162,7 @@ pyci-check imports --timeout 60
 禁止相對導入，發現時視為錯誤。
 
 ```bash
-pyci-check check . --check-relative
+pyci-check check --check-relative
 ```
 
 **範例錯誤**:
@@ -199,7 +199,7 @@ pyci-check imports --venv venv
 
 ```bash
 pyci-check imports --i-understand-this-will-execute-code
-pyci-check check . --i-understand-this-will-execute-code
+pyci-check check --i-understand-this-will-execute-code
 ```
 
 **安全提醒**:
@@ -364,7 +364,7 @@ jobs:
 
 ```bash
 # 建議的檢查順序
-pyci-check check .      # 語法 + import 檢查
+pyci-check check      # 語法 + import 檢查
 ruff check --fix        # Lint + 自動修復
 ruff format             # 格式化
 ```

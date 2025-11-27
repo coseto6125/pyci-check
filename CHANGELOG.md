@@ -11,6 +11,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Additional test coverage
 - Performance benchmarks
 
+## [0.1.4] - 2025-11-27
+
+### Added
+- **Statistics Display**: Show failed module count and total error count after import check
+  - Added summary section showing `Failed modules: X` and `Total errors: Y`
+  - Applied to both CLI mode and standalone mode
+- **Exclude Configuration**: Display excluded directories and files in import check output
+  - Show which directories and files are being excluded from checks
+  - Helps users understand what is being skipped
+- **pyci-check Configuration**: Support reading exclude settings from `[tool.pyci-check]`
+  - Merges exclude settings from both `[tool.pyci-check]` and `[tool.ruff]`
+  - Allows project-specific import check exclusions separate from linting
+
+### Changed
+- **i18n**: Added new translation keys for statistics and exclude display
+  - `imports.exclude_dirs` and `imports.exclude_files`
+  - `imports.summary.failed_modules` and `imports.summary.total_errors`
+  - `imports.standalone.summary_total_errors`
+  - Updated all locale files (en, zh_TW, zh_CN)
+
+## [0.1.3] - 2025-11-27
+
+### Changed
+- **Documentation**: Update all examples to remove unnecessary `.` parameter
+  - `pyci-check check` now the recommended way instead of `pyci-check check .`
+  - Parameter `.` is still supported but not required (current directory is default)
+  - Updated all README files, documentation, and CONTRIBUTING.md
+
 ## [0.1.2] - 2025-11-27
 
 ### Fixed
@@ -78,7 +106,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Automated release workflow
   - PyPI publishing support (Trusted Publisher)
 
-[Unreleased]: https://github.com/coseto6125/pyci-check/compare/v0.1.2...HEAD
+[Unreleased]: https://github.com/coseto6125/pyci-check/compare/v0.1.4...HEAD
+[0.1.4]: https://github.com/coseto6125/pyci-check/compare/v0.1.3...v0.1.4
+[0.1.3]: https://github.com/coseto6125/pyci-check/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/coseto6125/pyci-check/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/coseto6125/pyci-check/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/coseto6125/pyci-check/releases/tag/v0.1.0

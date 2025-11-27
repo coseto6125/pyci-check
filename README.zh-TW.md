@@ -41,7 +41,7 @@ uv pip install pyci-check
 
 ```bash
 # 檢查整個專案（語法 + import 靜態分析）
-pyci-check check .
+pyci-check check
 
 # 僅檢查語法
 pyci-check syntax
@@ -102,10 +102,10 @@ pyci-check uninstall-hooks
 
 ```bash
 # 檢查相對導入
-pyci-check check . --check-relative
+pyci-check check --check-relative
 
 # 發現錯誤立即停止
-pyci-check check . --fail-fast
+pyci-check check --fail-fast
 
 # 設定 import 超時（秒）
 pyci-check imports --timeout 60
@@ -115,7 +115,7 @@ pyci-check imports --venv .
 pyci-check imports --venv /path/to/project
 
 # 安靜模式執行完整檢查
-pyci-check check . --quiet --i-understand-this-will-execute-code
+pyci-check check --quiet --i-understand-this-will-execute-code
 ```
 
 ## 重要安全提醒

@@ -64,7 +64,7 @@
 5. **执行程式码品质检查**
    ```bash
    # 语法和 import 检查
-   uv run pyci-check check .
+   uv run pyci-check check
    
    # Linting
    uv run ruff check .
@@ -157,7 +157,7 @@ ptw
 
 提交 PR 前，请确保：
 ```bash
-uv run pyci-check check .
+uv run pyci-check check
 uv run ruff check .
 uv run ruff format .
 uv run pytest

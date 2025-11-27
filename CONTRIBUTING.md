@@ -64,7 +64,7 @@ We welcome feature requests! Please create an issue with:
 5. **Run code quality checks**
    ```bash
    # Syntax and import checks
-   uv run pyci-check check .
+   uv run pyci-check check
 
    # Linting
    uv run ruff check .
@@ -154,7 +154,7 @@ We use:
 
 Before submitting a PR, ensure:
 ```bash
-uv run pyci-check check .
+uv run pyci-check check
 uv run ruff check .
 uv run ruff format .
 uv run pytest
