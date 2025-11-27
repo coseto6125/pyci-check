@@ -1,5 +1,6 @@
 """Import 檢查進階測試."""
 
+from pyci_check.i18n import t
 from pyci_check.imports import (
     check_missing_modules,
     check_module_importable_static,
@@ -100,7 +101,9 @@ class TestImportAdvanced:
 
         assert module == "nonexistent_module_xyz"
         assert error is not None
-        assert "找不到模組" in error
+        # 使用多語系訊息檢查
+        expected_error = t("imports.error.module_not_found", "nonexistent_module_xyz")
+        assert error == expected_error
 
     def test_check_missing_modules_all_valid(self, temp_dir):
         """測試檢查所有有效的模組."""

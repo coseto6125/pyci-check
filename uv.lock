@@ -132,7 +132,7 @@ wheels = [
 
 [[package]]
 name = "pyci-check"
-version = "0.1.0"
+version = "0.1.1"
 source = { editable = "." }
 
 [package.optional-dependencies]
@@ -146,7 +146,7 @@ dev = [
 requires-dist = [
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0.0" },
     { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=4.1.0" },
-    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.14.6" },
+    { name = "ruff", marker = "extra == 'dev'", specifier = "==0.14.6" },
 ]
 provides-extras = ["dev"]
 

@@ -396,7 +396,7 @@ def check_module_importable_static(module: str, project_dir: str | None = None, 
             spec = importlib.util.find_spec(module)
         except Exception as e:
             # find_spec 檢查過程出錯,回傳錯誤訊息
-            return module, f"find_spec 失敗: {e}"
+            return module, t("imports.error.find_spec_failed", e)
 
     finally:
         # 確保 sys.path 總是被還原
@@ -450,7 +450,7 @@ def check_module_importable_static(module: str, project_dir: str | None = None, 
                     if os.path.exists(submodule_init):
                         return module, None
 
-    return module, f"靜態分析找不到模組: {module} (提示: 若確定存在,可使用 --no-sandbox)"
+    return module, t("imports.error.module_not_found", module)
 
 
 def check_module_importable(
@@ -477,7 +477,7 @@ def check_module_importable(
     """
     # S603: 安全檢查 - 驗證模組名稱僅包含合法字元
     if not MODULE_NAME_PATTERN.match(module):
-        return module, f"Invalid module name: {module}"
+        return module, t("imports.error.invalid_module_name", module)
 
     # 真實執行 import (subprocess 隔離)
     env = os.environ.copy()
@@ -531,13 +531,13 @@ def check_module_importable(
             return module, error
         return module, None
     except subprocess.TimeoutExpired:
-        return module, f"Import timeout ({timeout}s)"
+        return module, t("imports.error.import_timeout", timeout)
     except OSError as e:
         # 執行 Python 失敗 (檔案不存在、權限問題等)
-        return module, f"Failed to execute Python: {e}"
+        return module, t("imports.error.failed_to_execute", e)
     except Exception as e:
         # 其他預期外的錯誤
-        return module, f"Unexpected error: {e}"
+        return module, t("imports.error.unexpected_error", e)
 
 
 def check_missing_modules(

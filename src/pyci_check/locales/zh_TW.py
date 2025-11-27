@@ -83,4 +83,17 @@ TRANSLATIONS = {
     "imports.standalone.mode": "使用 subprocess 並行檢查（真正執行 import）",
     "imports.standalone.found_modules": "找到 {} 個獨立模組,開始檢查...",
     "imports.standalone.run_dynamic": "執行動態 import 檢查: {}",
+    # Import error messages
+    "imports.error.find_spec_failed": "find_spec 失敗: {}",
+    "imports.error.module_not_found": "靜態分析找不到模組: {}",
+    "imports.error.invalid_module_name": "Invalid module name: {}",
+    "imports.error.import_timeout": "Import timeout ({}s)",
+    "imports.error.failed_to_execute": "Failed to execute Python: {}",
+    "imports.error.unexpected_error": "Unexpected error: {}",
+    # Syntax error messages
+    "syntax.error.syntax_error": "SyntaxError: {}",
+    "syntax.error.encoding_error": "Encoding Error: {}",
+    "syntax.error.file_error": "File Error: {}",
+    "syntax.error.unexpected_error": "Unexpected Error: {}",
+    "syntax.error.exception": "Exception: {}",
 }
