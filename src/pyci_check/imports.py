@@ -626,8 +626,8 @@ def print_results(
     if args.check_relative and all_relative_imports:
         has_issues = True
         for rel_import in all_relative_imports:
-            if not args.quiet:
-                print(t("imports.standalone.relative_warning", rel_import["file"], rel_import["line"], rel_import["statement"]))
+            # 錯誤訊息不受 --quiet 影響,總是顯示
+            print(t("imports.standalone.relative_warning", rel_import["file"], rel_import["line"], rel_import["statement"]))
 
     if missing_modules:
         has_issues = True
@@ -636,13 +636,13 @@ def print_results(
             for import_info in import_list:
                 file_path = import_info["file"]
                 error_msg = import_info.get("error", "Module not found")
-                if not args.quiet:
-                    rel_path = safe_relpath(file_path, args.project_path)
-                    print(t("imports.standalone.load_failed", module))
-                    print(t("imports.standalone.file_line", rel_path, import_info["line"]))
-                    print(t("imports.standalone.statement", import_info["statement"]))
-                    print(t("imports.standalone.reason", error_msg))
-                    print()
+                # 錯誤訊息不受 --quiet 影響,總是顯示
+                rel_path = safe_relpath(file_path, args.project_path)
+                print(t("imports.standalone.load_failed", module))
+                print(t("imports.standalone.file_line", rel_path, import_info["line"]))
+                print(t("imports.standalone.statement", import_info["statement"]))
+                print(t("imports.standalone.reason", error_msg))
+                print()
                 total_errors += 1
 
     if not args.quiet:
@@ -745,10 +745,10 @@ def main() -> None:
                 all_imports.append({"module": module, "line": 0, "statement": f"Dynamic load: {module}", "file": args.entry, "type": "dynamic"})
         except Exception as e:
             has_dynamic_error = True
-            if not args.quiet:
-                print(t("imports.standalone.dynamic_error", args.entry))
-                print(t("imports.standalone.reason", str(e)))
-                print()
+            # 錯誤訊息不受 --quiet 影響,總是顯示
+            print(t("imports.standalone.dynamic_error", args.entry))
+            print(t("imports.standalone.reason", str(e)))
+            print()
 
     unique_modules = {imp["module"] for imp in all_imports}
 
