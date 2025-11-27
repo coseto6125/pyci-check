@@ -76,7 +76,13 @@ def get_ruff_config_from_pyproject(project_dir: str) -> dict:
     """
     從 pyproject.toml 讀取 ruff 設定.
 
-    優先讀取 [tool.pyci-check] 的 exclude,如果為空則讀取 [tool.ruff] 的 exclude.
+    合併 [tool.pyci-check] 和 [tool.ruff] 的 exclude 和 extend-exclude 設定.
+
+    合併順序:
+    - [tool.pyci-check].exclude
+    - [tool.pyci-check].extend-exclude
+    - [tool.ruff].exclude
+    - [tool.ruff].extend-exclude
 
     Returns:
         dict with keys: src, exclude_dirs, exclude_files
@@ -100,10 +106,14 @@ def get_ruff_config_from_pyproject(project_dir: str) -> dict:
     if isinstance(src, str):
         src = [src]
 
-    # 讀取 pyci-check 的 exclude
+    # 讀取 pyci-check 的 exclude + extend-exclude
     pyci_exclude = pyci_check.get("exclude", [])
     if isinstance(pyci_exclude, str):
         pyci_exclude = [pyci_exclude]
+
+    pyci_extend_exclude = pyci_check.get("extend-exclude", [])
+    if isinstance(pyci_extend_exclude, str):
+        pyci_extend_exclude = [pyci_extend_exclude]
 
     # 讀取 ruff 的 exclude + extend-exclude
     exclude = ruff.get("exclude", [])
@@ -114,8 +124,8 @@ def get_ruff_config_from_pyproject(project_dir: str) -> dict:
     if isinstance(extend_exclude, str):
         extend_exclude = [extend_exclude]
 
-    # 合併去重: pyci-check 的 exclude + ruff 的 exclude + extend-exclude
-    all_exclude = set(pyci_exclude + exclude + extend_exclude)
+    # 合併去重: pyci-check 的 exclude + extend-exclude + ruff 的 exclude + extend-exclude
+    all_exclude = set(pyci_exclude + pyci_extend_exclude + exclude + extend_exclude)
 
     # 合併並分類
     exclude_dirs = []
@@ -622,6 +632,7 @@ def print_results(
 ) -> bool:
     """輸出結果."""
     has_issues = False
+    total_errors = 0
 
     if args.check_relative and all_relative_imports:
         has_issues = True
@@ -631,7 +642,6 @@ def print_results(
 
     if missing_modules:
         has_issues = True
-        total_errors = 0
         for module, import_list in sorted(missing_modules.items()):
             for import_info in import_list:
                 file_path = import_info["file"]
