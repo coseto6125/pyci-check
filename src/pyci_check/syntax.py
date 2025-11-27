@@ -7,6 +7,7 @@ import sys
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
+from pyci_check.i18n import t
 from pyci_check.utils import calculate_optimal_workers, get_exclude_dirs_set, safe_relpath, should_exclude_path
 
 
@@ -91,14 +92,14 @@ def check_file_syntax(file_path: str) -> tuple[bool, str]:
         return True, ""
 
     except SyntaxError as e:
-        return False, f"SyntaxError: {e}"
+        return False, t("syntax.error.syntax_error", e)
     except UnicodeDecodeError as e:
-        return False, f"Encoding Error: {e}"
+        return False, t("syntax.error.encoding_error", e)
     except OSError as e:
-        return False, f"File Error: {e}"
+        return False, t("syntax.error.file_error", e)
     except Exception as e:
         # 預期外的錯誤,但仍需報告
-        return False, f"Unexpected Error: {e}"
+        return False, t("syntax.error.unexpected_error", e)
 
 
 def check_files_parallel(python_files: list[str]) -> tuple[int, int, list]:
@@ -137,7 +138,7 @@ def check_files_parallel(python_files: list[str]) -> tuple[int, int, list]:
 
             except Exception as exc:
                 relative_path = safe_relpath(file_path, current_dir)
-                errors.append((relative_path, f"Exception: {exc}"))
+                errors.append((relative_path, t("syntax.error.exception", exc)))
 
     error_count = len(errors)
     return success_count, error_count, errors

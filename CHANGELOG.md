@@ -11,6 +11,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Additional test coverage
 - Performance benchmarks
 
+## [0.1.2] - 2025-11-27
+
+### Fixed
+- **i18n**: Migrate all hardcoded error messages to use translation system
+  - Import error messages now support multi-language (en/zh_TW/zh_CN)
+  - Syntax error messages now support multi-language (en/zh_TW/zh_CN)
+  - Removed misleading `--no-sandbox` hint from error messages
+  - Updated test cases to use translation function for consistency
+
 ## [0.1.1] - 2024-11-27
 
 ### Added
@@ -69,6 +78,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Automated release workflow
   - PyPI publishing support (Trusted Publisher)
 
-[Unreleased]: https://github.com/coseto6125/pyci-check/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/coseto6125/pyci-check/compare/v0.1.2...HEAD
+[0.1.2]: https://github.com/coseto6125/pyci-check/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/coseto6125/pyci-check/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/coseto6125/pyci-check/releases/tag/v0.1.0
