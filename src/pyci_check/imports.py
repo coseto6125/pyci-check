@@ -295,10 +295,8 @@ def extract_from_all_files(
         futures = {executor.submit(process_single_file, fp): fp for fp in python_files}
         for future in as_completed(futures):
             imports, relative_imports = future.result()
-            if imports:
-                all_imports.extend(imports)
-            if relative_imports:
-                all_relative_imports.extend(relative_imports)
+            all_imports.extend(imports)
+            all_relative_imports.extend(relative_imports)
 
     return all_imports, all_relative_imports
 
@@ -737,6 +735,7 @@ def main() -> None:
     )
 
     # 動態 import
+    has_dynamic_error = False
     if args.entry:
         if not args.quiet:
             print(t("imports.standalone.run_dynamic", args.entry))
@@ -745,9 +744,11 @@ def main() -> None:
             for module in dynamic_imports:
                 all_imports.append({"module": module, "line": 0, "statement": f"Dynamic load: {module}", "file": args.entry, "type": "dynamic"})
         except Exception as e:
-            print(f"❌ 執行入口檔案失敗: {args.entry}")
-            print(f"   錯誤: {e}")
-            sys.exit(1)
+            has_dynamic_error = True
+            if not args.quiet:
+                print(t("imports.standalone.dynamic_error", args.entry))
+                print(t("imports.standalone.reason", str(e)))
+                print()
 
     unique_modules = {imp["module"] for imp in all_imports}
 
@@ -767,7 +768,7 @@ def main() -> None:
     total_time = time.time() - start_time
 
     has_issues = print_results(missing_modules, all_relative_imports, args, total_time, unique_modules)
-    sys.exit(1 if has_issues else 0)
+    sys.exit(1 if (has_issues or has_dynamic_error) else 0)
 
 
 if __name__ == "__main__":

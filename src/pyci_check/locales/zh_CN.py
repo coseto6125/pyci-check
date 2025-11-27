@@ -88,6 +88,7 @@ TRANSLATIONS = {
     "imports.standalone.mode": "使用 subprocess 并行检查（真正执行 import）",
     "imports.standalone.found_modules": "找到 {} 个独立模块,开始检查...",
     "imports.standalone.run_dynamic": "执行动态 import 检查: {}",
+    "imports.standalone.dynamic_error": "[错误] 动态检查失败: {}",
     # Import error messages
     "imports.error.find_spec_failed": "find_spec 失败: {}",
     "imports.error.module_not_found": "静态分析找不到模块: {}",
