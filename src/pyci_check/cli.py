@@ -116,7 +116,7 @@ def check_imports(args: argparse.Namespace) -> int:
             if abs_path.endswith(".py"):
                 target_files.append(abs_path)
         elif os.path.isdir(abs_path):
-            target_files.extend(find_python_files(abs_path))
+            target_files.extend(find_python_files(abs_path, exclude_dirs=list(ignore_dirs)))
 
     all_imports, all_relative_imports = extract_from_all_files(
         project_path,

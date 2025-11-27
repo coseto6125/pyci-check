@@ -11,6 +11,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Additional test coverage
 - Performance benchmarks
 
+## [0.1.5] - 2025-11-27
+
+### Fixed
+- **Critical Bug**: Fix exclude directories not being applied when checking imports
+  - `find_python_files` was using default exclude set instead of ruff config
+  - Now correctly passes `ignore_dirs` from ruff/pyci-check configuration
+  - Resolves issue where excluded directories (e.g., experiments) were still being checked
+
 ## [0.1.4] - 2025-11-27
 
 ### Added
@@ -106,7 +114,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Automated release workflow
   - PyPI publishing support (Trusted Publisher)
 
-[Unreleased]: https://github.com/coseto6125/pyci-check/compare/v0.1.4...HEAD
+[Unreleased]: https://github.com/coseto6125/pyci-check/compare/v0.1.5...HEAD
+[0.1.5]: https://github.com/coseto6125/pyci-check/compare/v0.1.4...v0.1.5
 [0.1.4]: https://github.com/coseto6125/pyci-check/compare/v0.1.3...v0.1.4
 [0.1.3]: https://github.com/coseto6125/pyci-check/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/coseto6125/pyci-check/compare/v0.1.1...v0.1.2
