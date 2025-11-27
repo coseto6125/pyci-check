@@ -76,6 +76,8 @@ def get_ruff_config_from_pyproject(project_dir: str) -> dict:
     """
     從 pyproject.toml 讀取 ruff 設定.
 
+    優先讀取 [tool.pyci-check] 的 exclude,如果為空則讀取 [tool.ruff] 的 exclude.
+
     Returns:
         dict with keys: src, exclude_dirs, exclude_files
     """
@@ -91,13 +93,19 @@ def get_ruff_config_from_pyproject(project_dir: str) -> dict:
         return {"src": [], "exclude_dirs": [], "exclude_files": []}
 
     ruff = data.get("tool", {}).get("ruff", {})
+    pyci_check = data.get("tool", {}).get("pyci-check", {})
 
     # 讀取 src
     src = ruff.get("src", [])
     if isinstance(src, str):
         src = [src]
 
-    # 讀取 exclude + extend-exclude
+    # 讀取 pyci-check 的 exclude
+    pyci_exclude = pyci_check.get("exclude", [])
+    if isinstance(pyci_exclude, str):
+        pyci_exclude = [pyci_exclude]
+
+    # 讀取 ruff 的 exclude + extend-exclude
     exclude = ruff.get("exclude", [])
     if isinstance(exclude, str):
         exclude = [exclude]
@@ -106,8 +114,10 @@ def get_ruff_config_from_pyproject(project_dir: str) -> dict:
     if isinstance(extend_exclude, str):
         extend_exclude = [extend_exclude]
 
+    # 合併去重: pyci-check 的 exclude + ruff 的 exclude + extend-exclude
+    all_exclude = set(pyci_exclude + exclude + extend_exclude)
+
     # 合併並分類
-    all_exclude = set(exclude + extend_exclude)
     exclude_dirs = []
     exclude_files = []
 
@@ -623,6 +633,7 @@ def print_results(
 
     if missing_modules:
         has_issues = True
+        total_errors = 0
         for module, import_list in sorted(missing_modules.items()):
             for import_info in import_list:
                 file_path = import_info["file"]
@@ -634,6 +645,7 @@ def print_results(
                     print(t("imports.standalone.statement", import_info["statement"]))
                     print(t("imports.standalone.reason", error_msg))
                     print()
+                total_errors += 1
 
     if not args.quiet:
         print(t("imports.standalone.summary_line"))
@@ -641,6 +653,7 @@ def print_results(
         print(t("imports.standalone.summary_modules", len(unique_modules)))
         if missing_modules:
             print(t("imports.standalone.summary_failed", len(missing_modules)))
+            print(t("imports.standalone.summary_total_errors", total_errors))
         else:
             print(t("imports.standalone.summary_success"))
 
