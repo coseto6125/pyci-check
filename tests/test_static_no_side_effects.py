@@ -20,8 +20,7 @@ def _make_pkg_with_side_effect(root: Path, pkg_name: str, side_effect_marker: Pa
     init_py = pkg_dir / "__init__.py"
     # __init__.py 在執行時會 touch marker 檔; 靜態檢查若呼叫到 import 機制就會留痕跡
     init_py.write_text(
-        "from pathlib import Path\n"
-        f"Path(r'{side_effect_marker}').write_text('PWNED')\n",
+        f"from pathlib import Path\nPath(r'{side_effect_marker}').write_text('PWNED')\n",
         encoding="utf-8",
     )
 
@@ -32,7 +31,9 @@ def test_top_level_package_check_does_not_execute_init(tmp_path: Path) -> None:
     _make_pkg_with_side_effect(tmp_path, "sideeffect_pkg", marker)
 
     _module, error = check_module_importable_static(
-        "sideeffect_pkg", project_dir=str(tmp_path), src_dirs=None,
+        "sideeffect_pkg",
+        project_dir=str(tmp_path),
+        src_dirs=None,
     )
 
     assert error is None, f"應找到 sideeffect_pkg，實際: {error}"
@@ -56,7 +57,8 @@ def test_dotted_submodule_check_does_not_execute_parent_init(tmp_path: Path) -> 
     (pkg_dir / "child.py").write_text("X = 1\n", encoding="utf-8")
 
     _module, error = check_module_importable_static(
-        "parent_pkg.child", project_dir=str(tmp_path),
+        "parent_pkg.child",
+        project_dir=str(tmp_path),
     )
 
     assert error is None, f"應找到 parent_pkg.child，實際: {error}"
@@ -71,7 +73,8 @@ def test_namespace_package_without_init_is_recognized(tmp_path: Path) -> None:
     # 注意: 沒有 __init__.py
 
     _module, error = check_module_importable_static(
-        "myns.submod.leaf", project_dir=str(tmp_path),
+        "myns.submod.leaf",
+        project_dir=str(tmp_path),
     )
     assert error is None, f"namespace package 路徑應可找到，實際: {error}"
 
@@ -269,8 +272,7 @@ def test_execute_mode_isolates_each_import_from_sys_modules_pollution(tmp_path: 
     from pyci_check.imports import check_missing_modules
 
     (tmp_path / "evil.py").write_text(
-        "import sys, types\n"
-        "sys.modules['missing_dep_xyz'] = types.ModuleType('missing_dep_xyz')\n",
+        "import sys, types\nsys.modules['missing_dep_xyz'] = types.ModuleType('missing_dep_xyz')\n",
         encoding="utf-8",
     )
     imports = [

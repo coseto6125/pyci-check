@@ -13,9 +13,7 @@ from functools import lru_cache
 # 注意: 一般 3.13/3.14/3.15 等非 't' 後綴的 build 仍有 GIL,此值為 False。
 # True 時 ThreadPoolExecutor 為真並行 (CPU-bound 工作自動受益);
 # False 時 ThreadPool 只對 I/O / subprocess 有用。
-IS_FREE_THREADED: bool = (
-    sys.version_info >= (3, 13) and sysconfig.get_config_var("Py_GIL_DISABLED") == 1
-)
+IS_FREE_THREADED: bool = sys.version_info >= (3, 13) and sysconfig.get_config_var("Py_GIL_DISABLED") == 1
 
 
 def should_use_thread_pool(task_count: int, work_kind: str = "cpu") -> bool:

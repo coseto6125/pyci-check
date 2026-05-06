@@ -48,6 +48,7 @@ except BaseException as e:
 sys.exit(0)
 """
 
+
 class _FindSpecCache:
     """
     find_spec 結果按 sys.path 內容 + mtime 做快取.
@@ -661,6 +662,7 @@ def _probe_local(module: str, project_dir: str, src_dirs: list[str] | None) -> b
 @lru_cache(maxsize=1)
 def _module_file_suffixes() -> tuple[str, ...]:
     import importlib.machinery as _im
+
     return (".py", *_im.EXTENSION_SUFFIXES)
 
 
@@ -848,9 +850,7 @@ def check_missing_modules(
 
     # try/except ImportError 包住的模組 (全部使用點都 optional) → 跳過驗證
     # 這是 Python 表達 optional dep 的標準寫法；missing 不算錯
-    all_optional_modules: set[str] = {
-        mod for mod, infos in modules_by_name.items() if all(info.get("optional", False) for info in infos)
-    }
+    all_optional_modules: set[str] = {mod for mod, infos in modules_by_name.items() if all(info.get("optional", False) for info in infos)}
     for mod in all_optional_modules:
         del modules_by_name[mod]
 
@@ -921,10 +921,7 @@ def check_missing_modules(
     workers = max_workers or calculate_optimal_workers(len(unique_modules))
     if should_use_thread_pool(len(unique_modules), work_kind="io"):
         with ThreadPoolExecutor(max_workers=workers) as executor:
-            futures = {
-                executor.submit(check_module_importable, m, project_dir, src_dirs, timeout, venv_path): m
-                for m in unique_modules
-            }
+            futures = {executor.submit(check_module_importable, m, project_dir, src_dirs, timeout, venv_path): m for m in unique_modules}
             for future in as_completed(futures):
                 module, error = future.result()
                 if error:
