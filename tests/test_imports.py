@@ -3,8 +3,6 @@
 import tempfile
 from pathlib import Path
 
-import pytest
-
 from pyci_check.imports import (
     MODULE_NAME_PATTERN,
     check_module_importable,
@@ -59,6 +57,7 @@ class TestImportChecker:
         module, error = check_module_importable("os; rm -rf /", timeout=5)
 
         assert module == "os; rm -rf /"
+        assert error is not None
         assert "Invalid module name" in error
 
     def test_extract_imports_from_code(self):
@@ -174,3 +173,40 @@ extend-exclude = ["*.egg-info"]
             assert config["src"] == []
             assert config["exclude_dirs"] == []
             assert config["exclude_files"] == []
+
+    def test_get_pyci_check_exclude_config(self):
+        """測試從 pyproject.toml 讀取 [tool.pyci-check] 的 exclude 和 extend-exclude."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            # 創建 pyproject.toml
+            pyproject_path = Path(tmpdir) / "pyproject.toml"
+            pyproject_content = """
+[tool.pyci-check]
+exclude = [".venv", "build", "dist"]
+extend-exclude = ["experiments/", "*.egg-info"]
+
+[tool.ruff]
+src = ["src"]
+exclude = ["node_modules"]
+extend-exclude = ["starlette_app.py"]
+"""
+            pyproject_path.write_text(pyproject_content, encoding="utf-8")
+
+            # 清除 cache
+            get_ruff_config_from_pyproject.cache_clear()
+
+            config = get_ruff_config_from_pyproject(tmpdir)
+
+            # 驗證 src
+            assert config["src"] == ["src"]
+
+            # 驗證 exclude: 應該合併 pyci-check 和 ruff 的 exclude + extend-exclude
+            # 目錄: .venv, build, dist, experiments, node_modules
+            # 檔案: *.egg-info, starlette_app.py
+            assert ".venv" in config["exclude_dirs"]
+            assert "build" in config["exclude_dirs"]
+            assert "dist" in config["exclude_dirs"]
+            assert "experiments" in config["exclude_dirs"]  # 來自 pyci-check extend-exclude
+            assert "node_modules" in config["exclude_dirs"]  # 來自 ruff exclude
+
+            assert "*.egg-info" in config["exclude_files"]  # 來自 pyci-check extend-exclude
+            assert "starlette_app.py" in config["exclude_files"]  # 來自 ruff extend-exclude

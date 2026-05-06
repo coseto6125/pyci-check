@@ -3,8 +3,6 @@
 import tempfile
 from pathlib import Path
 
-import pytest
-
 from pyci_check.i18n import _find_pyproject_toml, _normalize_locale, get_locale, t
 
 

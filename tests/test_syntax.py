@@ -3,8 +3,6 @@
 import tempfile
 from pathlib import Path
 
-import pytest
-
 from pyci_check.syntax import check_file_syntax, check_files_parallel, find_python_files
 
 

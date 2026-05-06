@@ -5,8 +5,6 @@ import sys
 import tempfile
 from pathlib import Path
 
-import pytest
-
 
 class TestCLI:
     """CLI 測試."""

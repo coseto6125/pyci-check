@@ -1,52 +1,20 @@
 """檢查專案中所有 Python 檔案的語法是否正確."""
 
 import ast
-import glob
 import os
 import sys
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from pathlib import Path
 
 from pyci_check.i18n import t
-from pyci_check.utils import calculate_optimal_workers, get_exclude_dirs_set, safe_relpath, should_exclude_path
-
-
-def _has_symlink_in_path(file_path: str, base_dir: str) -> bool:
-    """
-    檢查檔案路徑中是否包含符號連結 (使用 pathlib).
-
-    Args:
-        file_path: 完整檔案路徑
-        base_dir: 基準目錄
-
-    Returns:
-        True 如果路徑中包含符號連結
-    """
-    try:
-        file_p = Path(file_path)
-        base_p = Path(base_dir).resolve()
-
-        # 逐層檢查每個父目錄（不使用 resolve 以保留符號連結）
-        current = file_p
-        while True:
-            if current.resolve() == base_p:
-                break
-            if current.is_symlink():
-                return True
-            parent = current.parent
-            if parent == current:  # 到達根目錄
-                break
-            current = parent
-
-        return False
-    except (OSError, ValueError):
-        # 路徑無效或無法解析
-        return False
+from pyci_check.utils import calculate_optimal_workers, get_exclude_dirs_set, safe_relpath, should_use_thread_pool, walk_python_files
 
 
 def find_python_files(directory: str, exclude_dirs: list[str] | None = None) -> list[str]:
     """
-    找出指定目錄下所有的 Python 檔案 (優化版本).
+    找出指定目錄下所有的 Python 檔案.
+
+    用 os.walk(followlinks=False) 在 walk 過程 prune 排除目錄、跳過符號連結；
+    比 glob.glob + 事後過濾快約 3-5x。
 
     Args:
         directory: 要搜尋的目錄
@@ -56,22 +24,8 @@ def find_python_files(directory: str, exclude_dirs: list[str] | None = None) -> 
         Python 檔案路徑列表
     """
     exclude_set = get_exclude_dirs_set() if exclude_dirs is None else frozenset(exclude_dirs)
-
     ignore_files = frozenset({"starlette_app.py", "sanic_app.py"})
-
-    # 使用 glob 遞迴搜尋 (比 pathlib.rglob 快)
-    pattern = os.path.join(directory, "**", "*.py")
-    python_files = [
-        file_path
-        for file_path in glob.glob(pattern, recursive=True)
-        if (
-            os.path.basename(file_path) not in ignore_files
-            and not should_exclude_path(file_path, exclude_set)
-            and not _has_symlink_in_path(file_path, directory)  # 排除路徑中包含符號連結的檔案
-        )
-    ]
-
-    return sorted(python_files)
+    return walk_python_files(directory, exclude_set, ignore_files)
 
 
 def check_file_syntax(file_path: str) -> tuple[bool, str]:
@@ -104,7 +58,10 @@ def check_file_syntax(file_path: str) -> tuple[bool, str]:
 
 def check_files_parallel(python_files: list[str]) -> tuple[int, int, list]:
     """
-    並行檢查多個檔案的語法 (優化版本).
+    檢查多個檔案的語法 (自適應並行).
+
+    GIL build 對 CPU-bound 的 ast.parse 並行收益有限,小 repo (<200) serial 反而快;
+    free-threaded (3.13t) 上 ThreadPool 為真並行,所有規模都受益。
 
     Args:
         python_files: Python 檔案列表
@@ -115,33 +72,37 @@ def check_files_parallel(python_files: list[str]) -> tuple[int, int, list]:
     if not python_files:
         return 0, 0, []
 
-    max_workers = calculate_optimal_workers(len(python_files))
     current_dir = os.getcwd()
-
-    errors = []
+    errors: list[tuple[str, str]] = []
     success_count = 0
 
-    with ThreadPoolExecutor(max_workers=max_workers) as executor:
-        future_to_file = {executor.submit(check_file_syntax, fp): fp for fp in python_files}
-
-        for future in as_completed(future_to_file):
-            file_path = future_to_file[future]
-
+    if should_use_thread_pool(len(python_files), work_kind="cpu"):
+        max_workers = calculate_optimal_workers(len(python_files))
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            future_to_file = {executor.submit(check_file_syntax, fp): fp for fp in python_files}
+            for future in as_completed(future_to_file):
+                file_path = future_to_file[future]
+                try:
+                    is_valid, error_msg = future.result()
+                    if is_valid:
+                        success_count += 1
+                    else:
+                        errors.append((safe_relpath(file_path, current_dir), error_msg))
+                except Exception as exc:
+                    errors.append((safe_relpath(file_path, current_dir), t("syntax.error.exception", exc)))
+    else:
+        # 小 repo serial: 省 thread bootstrap 開銷
+        for fp in python_files:
             try:
-                is_valid, error_msg = future.result()
-
+                is_valid, error_msg = check_file_syntax(fp)
                 if is_valid:
                     success_count += 1
                 else:
-                    relative_path = safe_relpath(file_path, current_dir)
-                    errors.append((relative_path, error_msg))
-
+                    errors.append((safe_relpath(fp, current_dir), error_msg))
             except Exception as exc:
-                relative_path = safe_relpath(file_path, current_dir)
-                errors.append((relative_path, t("syntax.error.exception", exc)))
+                errors.append((safe_relpath(fp, current_dir), t("syntax.error.exception", exc)))
 
-    error_count = len(errors)
-    return success_count, error_count, errors
+    return success_count, len(errors), errors
 
 
 def main() -> None:

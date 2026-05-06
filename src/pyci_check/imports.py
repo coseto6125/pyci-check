@@ -10,7 +10,9 @@ Import 依賴檢查模組.
 
 import argparse
 import ast
-import glob
+import contextlib
+import hashlib
+import json
 import os
 import re
 import runpy
@@ -24,7 +26,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from functools import lru_cache
 
 from pyci_check.i18n import t
-from pyci_check.utils import calculate_optimal_workers, safe_relpath
+from pyci_check.utils import calculate_optimal_workers, get_exclude_dirs_set, safe_relpath, should_use_thread_pool, walk_python_files
 
 # 效能優化: 預先定義常數避免重複創建
 SENSITIVE_ENV_PREFIXES = frozenset({"AWS", "SECRET", "TOKEN", "KEY", "PASSWORD"})
@@ -33,21 +35,88 @@ SENSITIVE_ENV_PREFIXES = frozenset({"AWS", "SECRET", "TOKEN", "KEY", "PASSWORD"}
 # 模組名稱驗證: 符合 Python 識別字規則 (字母、數字、底線、點號)
 MODULE_NAME_PATTERN = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_]*(\.[a-zA-Z_][a-zA-Z0-9_]*)*$")
 
-# Import 檢查腳本模板 (避免每次重新建立字串)
+# 一次性 subprocess import 檢查腳本; sys.exit(0) 在 try 外面避免被 BaseException 捕到
 IMPORT_CHECK_SCRIPT = """
 import sys
-import os
-
-# 禁止寫入操作
 sys.dont_write_bytecode = True
-
 try:
     __import__('{module}')
-    sys.exit(0)
-except Exception as e:
-    print(str(e), file=sys.stderr)
+except BaseException as e:
+    # 含 SystemExit/KeyboardInterrupt: 模組 top-level 觸發 sys.exit 視為失敗
+    print(str(e) or type(e).__name__, file=sys.stderr)
     sys.exit(1)
+sys.exit(0)
 """
+
+
+class _FindSpecCache:
+    """
+    find_spec 結果按 sys.path 內容 + mtime 做快取.
+
+    Cache key: sys.path 字串 + 各路徑 mtime 的 sha256 (取前 16 字)
+    pip install / venv 變更 → 簽名改變 → cache 自動失效
+    """
+
+    FILENAME = "find_spec.json"
+    VERSION = 2
+
+    def __init__(self, project_dir: str | None, sys_path: list[str]) -> None:
+        self.disabled = project_dir is None
+        if self.disabled:
+            self.signature = ""
+            self.cache_file = ""
+        else:
+            self.cache_dir = os.path.join(project_dir, ".pyci-check-cache")
+            self.cache_file = os.path.join(self.cache_dir, self.FILENAME)
+            self.signature = self._compute_signature(sys_path)
+        self._data: dict[str, bool | str] = {}  # module -> True (found) / error_msg (missing)
+        self._dirty = False
+        if not self.disabled:
+            self._load()
+
+    @staticmethod
+    def _compute_signature(sys_path: list[str]) -> str:
+        parts = ["|".join(sys_path)]
+        for p in sys_path:
+            try:
+                parts.append(f"{p}={os.path.getmtime(p)}")
+            except OSError:
+                # 路徑不存在: 簽名仍應穩定
+                parts.append(f"{p}=missing")
+        return hashlib.sha256("\n".join(parts).encode()).hexdigest()[:16]
+
+    def _load(self) -> None:
+        try:
+            with open(self.cache_file, encoding="utf-8") as f:
+                data = json.load(f)
+        except (OSError, ValueError):
+            return
+        if data.get("version") == self.VERSION and data.get("signature") == self.signature:
+            self._data = data.get("results", {})
+
+    def get(self, module: str) -> tuple[bool, str | None] | None:
+        """None = miss, (True, None) = 已找到, (False, msg) = 找不到."""
+        v = self._data.get(module)
+        if v is None:
+            return None
+        if v is True:
+            return (True, None)
+        return (False, str(v))
+
+    def set(self, module: str, error: str | None) -> None:
+        self._data[module] = True if error is None else error
+        self._dirty = True
+
+    def flush(self) -> None:
+        if self.disabled or not self._dirty:
+            return
+        try:
+            os.makedirs(self.cache_dir, exist_ok=True)
+            with open(self.cache_file, "w", encoding="utf-8") as f:
+                json.dump({"version": self.VERSION, "signature": self.signature, "results": self._data}, f)
+        except OSError:
+            # 寫入失敗不影響檢查結果
+            pass
 
 
 @lru_cache(maxsize=1)
@@ -76,7 +145,13 @@ def get_ruff_config_from_pyproject(project_dir: str) -> dict:
     """
     從 pyproject.toml 讀取 ruff 設定.
 
-    優先讀取 [tool.pyci-check] 的 exclude,如果為空則讀取 [tool.ruff] 的 exclude.
+    合併 [tool.pyci-check] 和 [tool.ruff] 的 exclude 和 extend-exclude 設定.
+
+    合併順序:
+    - [tool.pyci-check].exclude
+    - [tool.pyci-check].extend-exclude
+    - [tool.ruff].exclude
+    - [tool.ruff].extend-exclude
 
     Returns:
         dict with keys: src, exclude_dirs, exclude_files
@@ -100,10 +175,14 @@ def get_ruff_config_from_pyproject(project_dir: str) -> dict:
     if isinstance(src, str):
         src = [src]
 
-    # 讀取 pyci-check 的 exclude
+    # 讀取 pyci-check 的 exclude + extend-exclude
     pyci_exclude = pyci_check.get("exclude", [])
     if isinstance(pyci_exclude, str):
         pyci_exclude = [pyci_exclude]
+
+    pyci_extend_exclude = pyci_check.get("extend-exclude", [])
+    if isinstance(pyci_extend_exclude, str):
+        pyci_extend_exclude = [pyci_extend_exclude]
 
     # 讀取 ruff 的 exclude + extend-exclude
     exclude = ruff.get("exclude", [])
@@ -114,8 +193,8 @@ def get_ruff_config_from_pyproject(project_dir: str) -> dict:
     if isinstance(extend_exclude, str):
         extend_exclude = [extend_exclude]
 
-    # 合併去重: pyci-check 的 exclude + ruff 的 exclude + extend-exclude
-    all_exclude = set(pyci_exclude + exclude + extend_exclude)
+    # 合併去重: pyci-check 的 exclude + extend-exclude + ruff 的 exclude + extend-exclude
+    all_exclude = set(pyci_exclude + pyci_extend_exclude + exclude + extend_exclude)
 
     # 合併並分類
     exclude_dirs = []
@@ -163,37 +242,141 @@ def get_venv_from_pyproject(project_dir: str) -> str | None:
     return None
 
 
-class ImportVisitor(ast.NodeVisitor):
-    """AST 訪問器，用於提取 import 語句."""
+_OPTIONAL_IMPORT_EXC_NAMES = frozenset({"ImportError", "ModuleNotFoundError", "Exception", "BaseException"})
+
+
+def _is_type_checking_guard(test: ast.expr) -> bool:
+    """判斷 if test 是否為 TYPE_CHECKING 守護 (typing.TYPE_CHECKING / TYPE_CHECKING)."""
+    if isinstance(test, ast.Name) and test.id == "TYPE_CHECKING":
+        return True
+    return bool(isinstance(test, ast.Attribute) and test.attr == "TYPE_CHECKING")
+
+
+def _handler_catches_import_error(handler: ast.ExceptHandler) -> bool:
+    """Except 子句是否會抓到 ImportError (含 bare except / Exception / 元組)."""
+    exc_type = handler.type
+    if exc_type is None:
+        return True  # bare except: 抓 everything 含 ImportError
+    if isinstance(exc_type, ast.Name):
+        return exc_type.id in _OPTIONAL_IMPORT_EXC_NAMES
+    if isinstance(exc_type, ast.Attribute):
+        return exc_type.attr in _OPTIONAL_IMPORT_EXC_NAMES
+    if isinstance(exc_type, ast.Tuple):
+        for elt in exc_type.elts:
+            if isinstance(elt, ast.Name) and elt.id in _OPTIONAL_IMPORT_EXC_NAMES:
+                return True
+            if isinstance(elt, ast.Attribute) and elt.attr in _OPTIONAL_IMPORT_EXC_NAMES:
+                return True
+    return False
+
+
+def _handle_import(visitor: "ImportVisitor", stmt: ast.Import) -> None:
+    for alias in stmt.names:
+        visitor.imports.append(visitor._create_import_info(alias.name, stmt.lineno, f"import {alias.name}", "absolute"))
+
+
+def _handle_import_from(visitor: "ImportVisitor", stmt: ast.ImportFrom) -> None:
+    names_part = ", ".join(alias.name for alias in stmt.names)
+    if stmt.level > 0:  # 相對導入
+        statement = f"from {'.' * stmt.level}{stmt.module or ''} import {names_part}"
+        visitor.relative_imports.append(
+            {**visitor._create_import_info(stmt.module or ".", stmt.lineno, statement, "relative"), "level": stmt.level},
+        )
+    elif stmt.module:  # 絕對導入
+        statement = f"from {stmt.module} import {names_part}"
+        visitor.imports.append(visitor._create_import_info(stmt.module, stmt.lineno, statement, "absolute"))
+
+
+def _handle_if(visitor: "ImportVisitor", stmt: ast.If) -> None:
+    """If 特別處理: TYPE_CHECKING 守護下 body runtime 不執行，只走 orelse."""
+    if _is_type_checking_guard(stmt.test):
+        visitor._walk(stmt.orelse)
+    else:
+        visitor._walk(stmt.body)
+        visitor._walk(stmt.orelse)
+
+
+def _handle_body_orelse(visitor: "ImportVisitor", stmt: ast.While | ast.For | ast.AsyncFor) -> None:
+    visitor._walk(stmt.body)
+    visitor._walk(stmt.orelse)
+
+
+def _handle_body_only(visitor: "ImportVisitor", stmt: ast.With | ast.AsyncWith | ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef) -> None:
+    visitor._walk(stmt.body)
+
+
+def _handle_try(visitor: "ImportVisitor", stmt: ast.Try | ast.TryStar) -> None:
+    """Try 特別處理: 若任一 handler 抓 ImportError，try.body 內的 import 標 optional."""
+    catches_import = any(_handler_catches_import_error(h) for h in stmt.handlers)
+    if catches_import:
+        visitor._optional_depth += 1
+        try:
+            visitor._walk(stmt.body)
+        finally:
+            visitor._optional_depth -= 1
+    else:
+        visitor._walk(stmt.body)
+    for handler in stmt.handlers:
+        visitor._walk(handler.body)
+    visitor._walk(stmt.orelse)
+    visitor._walk(stmt.finalbody)
+
+
+def _handle_match(visitor: "ImportVisitor", stmt: ast.Match) -> None:
+    for case in stmt.cases:
+        visitor._walk(case.body)
+
+
+# Dispatch by exact type — AST stmt 都是 concrete leaf class，無需 isinstance 多型；
+# 大宗 stmt (Expr/Assign/Return/...) 一次 dict.get miss 即跳過，免走 isinstance 鏈
+_DISPATCH: dict[type, "callable"] = {
+    ast.Import: _handle_import,
+    ast.ImportFrom: _handle_import_from,
+    ast.If: _handle_if,
+    ast.While: _handle_body_orelse,
+    ast.For: _handle_body_orelse,
+    ast.AsyncFor: _handle_body_orelse,
+    ast.With: _handle_body_only,
+    ast.AsyncWith: _handle_body_only,
+    ast.FunctionDef: _handle_body_only,
+    ast.AsyncFunctionDef: _handle_body_only,
+    ast.ClassDef: _handle_body_only,
+    ast.Try: _handle_try,
+    ast.TryStar: _handle_try,
+    ast.Match: _handle_match,
+}
+
+
+class ImportVisitor:
+    """提取 import 語句，只下鑽 statement 容器，不訪問 expression."""
 
     def __init__(self, filepath: str) -> None:
         self.filepath = filepath
         self.imports: list[dict] = []
         self.relative_imports: list[dict] = []
+        # try/except ImportError 嵌套深度: > 0 表示當前 import 是 optional dep
+        self._optional_depth = 0
 
     def _create_import_info(self, module: str, line: int, statement: str, import_type: str) -> dict:
-        return {"module": module, "line": line, "statement": statement, "file": self.filepath, "type": import_type}
+        return {
+            "module": module,
+            "line": line,
+            "statement": statement,
+            "file": self.filepath,
+            "type": import_type,
+            "optional": self._optional_depth > 0,
+        }
 
-    def visit_Import(self, node: ast.Import) -> None:
-        for alias in node.names:
-            module_name = alias.name
-            self.imports.append(self._create_import_info(module_name, node.lineno, f"import {alias.name}", "absolute"))
+    def visit(self, tree: ast.Module) -> None:
+        self._walk(tree.body)
 
-    def visit_ImportFrom(self, node: ast.ImportFrom) -> None:
-        if node.level > 0:  # 相對導入
-            # Python 3.11 兼容: 避免 f-string 中的引號巢狀
-            dots = "." * node.level
-            module_part = node.module or ""
-            names_part = ", ".join(alias.name for alias in node.names)
-            statement = f"from {dots}{module_part} import {names_part}"
-            self.relative_imports.append(
-                {**self._create_import_info(node.module or ".", node.lineno, statement, "relative"), "level": node.level},
-            )
-        elif node.module:  # 絕對導入
-            module_name = node.module
-            names_part = ", ".join(alias.name for alias in node.names)
-            statement = f"from {node.module} import {names_part}"
-            self.imports.append(self._create_import_info(module_name, node.lineno, statement, "absolute"))
+    def _walk(self, stmts: list[ast.stmt]) -> None:
+        # 區域變數 hoist: 避免每次迭代查 global
+        dispatch_get = _DISPATCH.get
+        for stmt in stmts:
+            handler = dispatch_get(type(stmt))
+            if handler is not None:
+                handler(self, stmt)
 
 
 def extract_imports_from_code(code: str, filepath: str) -> tuple[list[dict], list[dict]]:
@@ -261,27 +444,12 @@ def extract_from_all_files(
 ) -> tuple[list[dict], list[dict]]:
     """使用多執行緒處理檔案 (優化版本)."""
     if ignore_dirs is None:
-        ignore_dirs = {"venv", "env", ".venv", "node_modules", "__pycache__", ".git", "build", "dist", "experiments", ".layer_build"}
+        ignore_dirs = set(get_exclude_dirs_set())
     if ignore_files is None:
         ignore_files = set()
 
-    # 如果指定了 target_files,則使用指定的檔案列表
-    if target_files:
-        python_files = target_files
-    else:
-        # 使用 glob 遞迴搜尋 (比 pathlib.rglob 快)
-        # 優化: 避免在迴圈中重複創建 set (從 O(n×m) 降到 O(n))
-        pattern = os.path.join(project_dir, "**", "*.py")
-        python_files = []
-        for py_file in glob.glob(pattern, recursive=True):
-            # 檢查檔案名 (O(1) set lookup)
-            if os.path.basename(py_file) in ignore_files:
-                continue
-            # 檢查路徑中是否包含要忽略的目錄 (使用 any() 短路求值)
-            path_parts = py_file.replace("\\", "/").split("/")
-            if any(part in ignore_dirs for part in path_parts):
-                continue
-            python_files.append(py_file)
+    # target_files 優先；否則用 walk_python_files (os.walk(followlinks=False) + prune 排除目錄)
+    python_files = target_files or walk_python_files(project_dir, frozenset(ignore_dirs), frozenset(ignore_files))
 
     if not python_files:
         return [], []
@@ -291,14 +459,18 @@ def extract_from_all_files(
     all_imports: list[dict] = []
     all_relative_imports: list[dict] = []
 
-    with ThreadPoolExecutor(max_workers=max_workers) as executor:
-        futures = {executor.submit(process_single_file, fp): fp for fp in python_files}
-        for future in as_completed(futures):
-            imports, relative_imports = future.result()
-            if imports:
+    if should_use_thread_pool(len(python_files), work_kind="cpu"):
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            futures = {executor.submit(process_single_file, fp): fp for fp in python_files}
+            for future in as_completed(futures):
+                imports, relative_imports = future.result()
                 all_imports.extend(imports)
-            if relative_imports:
                 all_relative_imports.extend(relative_imports)
+    else:
+        for file_path in python_files:
+            imports, relative_imports = process_single_file(file_path)
+            all_imports.extend(imports)
+            all_relative_imports.extend(relative_imports)
 
     return all_imports, all_relative_imports
 
@@ -361,104 +533,227 @@ def find_python_executable(venv_path: str | None = None) -> str:
     return sys.executable
 
 
-def check_module_importable_static(module: str, project_dir: str | None = None, src_dirs: list[str] | None = None) -> tuple[str, str | None]:
+def _build_sandbox_env(project_dir: str | None, src_dirs: list[str] | None, venv_path: str | None) -> tuple[dict[str, str], str]:
     """
-    最高限度靜態檢查模組是否存在 (完全不執行程式碼).
+    組 sandbox 用的 env dict 與 Python 執行檔路徑.
 
-    檢查策略:
-    1. 使用 importlib.util.find_spec 檢查標準庫和已安裝套件
-    2. 檢查專案目錄中的模組檔案
-    3. 支援套件和單檔案模組
-    4. 支援命名空間套件
+    用於 subprocess import 檢查 (一次性 check_module_importable 與常駐 worker 共用).
+    步驟: PYTHONPATH 注入專案路徑 → 過濾 SENSITIVE_ENV_PREFIXES → 設安全變數。
+
+    Returns:
+        (sandbox_env, python_exec)
+    """
+    env = os.environ.copy()
+
+    paths: list[str] = []
+    if project_dir:
+        paths.append(project_dir)
+        if src_dirs:
+            for src in src_dirs:
+                full_path = os.path.join(project_dir, src)
+                if os.path.isdir(full_path):
+                    paths.append(full_path)
+    if paths:
+        existing = env.get("PYTHONPATH", "")
+        env["PYTHONPATH"] = os.pathsep.join(paths + ([existing] if existing else []))
+
+    sandbox_env = {k: v for k, v in env.items() if not any(k.startswith(prefix) for prefix in SENSITIVE_ENV_PREFIXES)}
+    sandbox_env["PYTHONDONTWRITEBYTECODE"] = "1"
+    # PYTHONINSPECT: 3.14+ 任何非空字串都 enable; 必須 pop 而非設 "0"
+    sandbox_env.pop("PYTHONINSPECT", None)
+    sandbox_env["PYTHONUNBUFFERED"] = "1"
+
+    return sandbox_env, find_python_executable(venv_path)
+
+
+@lru_cache(maxsize=1)
+def _stdlib_top_levels() -> frozenset[str]:
+    """Stdlib 全部模組名 (3.10+)，比 sys.builtin_module_names 完整 (含純 Python stdlib)."""
+    return frozenset(sys.stdlib_module_names) | frozenset({"__main__", "__future__", "__builtins__"})
+
+
+@lru_cache(maxsize=1)
+def _installed_top_levels() -> frozenset[str]:
+    """
+    已安裝第三方 top-level 模組名集合.
+
+    雙保險:
+    1. importlib.metadata.packages_distributions() — 讀 dist-info top_level.txt / RECORD
+    2. site-packages 直接 ls — 補強 editable install / 老式 setuptools / namespace package
+    """
+    import site
+    from importlib.metadata import PackageNotFoundError, packages_distributions
+
+    # metadata 損壞或缺檔: suppress 後退到下面的 site-packages ls fallback
+    names: set[str] = set()
+    with contextlib.suppress(PackageNotFoundError, OSError, ValueError):
+        names.update(packages_distributions().keys())
+
+    # site-packages ls fallback (補 editable install / namespace package / metadata 漏網)
+    candidates: list[str] = []
+    with contextlib.suppress(AttributeError, OSError):
+        candidates.extend(site.getsitepackages())
+    try:
+        user_site = site.getusersitepackages()
+        if user_site:
+            candidates.append(user_site)
+    except OSError:
+        pass
+
+    for site_dir in candidates:
+        try:
+            for entry in os.listdir(site_dir):
+                # 排除 dist-info / egg-info / pyc 等
+                if entry.endswith((".dist-info", ".egg-info", ".pyc", ".pth", ".txt")):
+                    continue
+                if entry.startswith(("__pycache__", "_distutils_hack")):
+                    continue
+                if entry.endswith(".py"):
+                    stem = entry[:-3]
+                    if stem.isidentifier():
+                        names.add(stem)
+                # 目錄: regular package or namespace package
+                elif entry.isidentifier():
+                    names.add(entry)
+        except OSError:
+            continue
+
+    return frozenset(names)
+
+
+def _probe_module_roots(module: str, roots: list[str]) -> bool:
+    """檢查 roots 內是否存在 dotted module (檔案系統純 probe)."""
+    parts = module.split(".")
+    suffixes = _module_file_suffixes()
+
+    for root in roots:
+        if not os.path.isdir(root):
+            continue
+        # 沿 dotted 一路走下去，途中允許 namespace package (沒 __init__.py 也行)
+        cur = root
+        for i, part in enumerate(parts):
+            is_last = i == len(parts) - 1
+            dir_path = os.path.join(cur, part)
+            if is_last:
+                # 葉子: 接受 .py / C extension / 套件目錄 / namespace package 目錄
+                for suffix in suffixes:
+                    if os.path.isfile(os.path.join(cur, part + suffix)):
+                        return True
+                if os.path.isdir(dir_path):
+                    return True
+                break
+            # 中間段: 一定要是目錄 (regular 或 namespace package 都可)
+            if os.path.isdir(dir_path):
+                cur = dir_path
+                continue
+            break
+    return False
+
+
+def _probe_local(module: str, project_dir: str, src_dirs: list[str] | None) -> bool:
+    """檢查 project_dir + src_dirs 內是否存在該模組 (檔案系統純 probe)."""
+    roots = [project_dir]
+    if src_dirs:
+        roots.extend(os.path.join(project_dir, s) for s in src_dirs)
+    return _probe_module_roots(module, roots)
+
+
+# .py + 當前 Python 的 C extension 後綴 (含 ABI tag / platform tag)
+@lru_cache(maxsize=1)
+def _module_file_suffixes() -> tuple[str, ...]:
+    import importlib.machinery as _im
+
+    return (".py", *_im.EXTENSION_SUFFIXES)
+
+
+def _venv_site_packages(venv_path: str) -> list[str]:
+    """從 --venv 參數推算 site-packages 路徑 (跨平台)."""
+    import glob
+
+    candidates: list[str] = []
+    # 兩種佈局: <venv>/.venv/lib/... (uv 慣例) 與 <venv>/lib/... (標準 venv)
+    for base in (os.path.join(venv_path, ".venv"), venv_path):
+        # Unix: lib/python3.X/site-packages
+        candidates.extend(glob.glob(os.path.join(base, "lib", "python*", "site-packages")))
+        # Windows: Lib/site-packages
+        win_path = os.path.join(base, "Lib", "site-packages")
+        if os.path.isdir(win_path):
+            candidates.append(win_path)
+    return candidates
+
+
+# 大量 dotted import 共享同一路徑查找 → 掃描結果可重用
+@lru_cache(maxsize=512)
+def _probe_sys_path_cached(module: str, paths_tuple: tuple[str, ...]) -> bool:
+    roots = [entry or os.getcwd() for entry in paths_tuple]
+    return _probe_module_roots(module, roots)
+
+
+def _probe_sys_path(module: str, extra_paths: list[str] | None = None) -> bool:
+    """
+    掃 sys.path (+ extra_paths) 各 entry 純檔案系統檢查; 不觸發任何 finder 或 __init__.py.
+
+    補 metadata + site-packages ls 的漏網 case:
+    - .pth 注入的非標準路徑
+    - 條件式 sys.path.insert 加進來的目錄
+    - PEP 660 editable install 把源碼路徑 inject 到 sys.path
+    - C extension (.so / .pyd / .abi3.so) 子模組
+    - 透過 --venv 指定的外部虛擬環境 site-packages
+
+    Args:
+        module: 模組名稱
+        extra_paths: 額外掃描路徑 (例如 --venv 指定的 site-packages)
+    """
+    # tuple 化 paths 才能進 lru_cache
+    paths_tuple = (*extra_paths, *sys.path) if extra_paths else tuple(sys.path)
+    return _probe_sys_path_cached(module, paths_tuple)
+
+
+def check_module_importable_static(
+    module: str,
+    project_dir: str | None = None,
+    src_dirs: list[str] | None = None,
+    extra_paths: list[str] | None = None,
+) -> tuple[str, str | None]:
+    """
+    純靜態檢查模組是否能被找到 (完全不執行任何使用者程式碼).
+
+    四層 probe (從最快到最慢):
+    L1. stdlib (sys.stdlib_module_names) — frozenset O(1)
+    L2. 已安裝第三方 (importlib.metadata + site-packages ls)
+    L3. 專案 local (project_dir + src_dirs 檔案系統)
+    L4. sys.path + extra_paths probe (補 .pth / editable install / --venv 指定的 site-packages)
+
+    僅檢查「模組是否能被找到」,不檢查「import 時是否會出錯」(後者需 --execute 模式)。
+    完全不呼叫 importlib.util.find_spec — 後者對 dotted name 會 import parent package
+    觸發 __init__.py 副作用 (與並行檢查衝突可能 deadlock)。
 
     Args:
         module: 模組名稱
         project_dir: 專案根目錄
         src_dirs: 額外的 source 目錄
+        extra_paths: 外部虛擬環境 site-packages 路徑 (來自 --venv 參數)
 
     Returns:
         (模組名稱, 錯誤訊息 or None)
     """
-    import importlib.util
-    import sys
+    top = module.split(".", 1)[0]
 
-    # 策略 1: 檢查標準庫和已安裝套件
-    # 暫存原始 sys.path
-    original_path = sys.path.copy()
-
-    try:
-        # 加入專案路徑到 sys.path (不執行程式碼)
-        if project_dir and src_dirs:
-            for src in src_dirs:
-                src_path = os.path.join(project_dir, src)
-                if os.path.exists(src_path):
-                    sys.path.insert(0, src_path)
-
-            # 也加入專案根目錄
-            sys.path.insert(0, project_dir)
-
-        # 使用 find_spec 靜態查找
-        # 注意: find_spec 的行為
-        # - 找到模組: 回傳 ModuleSpec 物件
-        # - 找不到: 回傳 None
-        # - 錯誤 (循環導入、損壞的模組等): 拋出異常 → 應該報錯
-        try:
-            spec = importlib.util.find_spec(module)
-        except Exception as e:
-            # find_spec 檢查過程出錯,回傳錯誤訊息
-            return module, t("imports.error.find_spec_failed", e)
-
-    finally:
-        # 確保 sys.path 總是被還原
-        sys.path = original_path
-
-    # 策略 1 成功找到模組
-    if spec is not None:
+    # L1: stdlib
+    if top in _stdlib_top_levels():
         return module, None
 
-    # 策略 2: 手動檢查專案目錄中的檔案
-    if project_dir:
-        # 處理模組名稱 (支援 a.b.c 形式)
-        module_parts = module.split(".")
-        base_module = module_parts[0]
+    # L2: 已安裝第三方 top-level (dotted submodule 需走後續檔案系統深度 probe)
+    if "." not in module and not extra_paths and top in _installed_top_levels():
+        return module, None
 
-        # 檢查根目錄
-        root_module_py = os.path.join(project_dir, f"{base_module}.py")
-        root_module_init = os.path.join(project_dir, base_module, "__init__.py")
-        if os.path.exists(root_module_py):
-            return module, None
-        if os.path.exists(root_module_init):
-            return module, None
+    # L3: 專案 local (能定位到 dotted 葉子節點)
+    if project_dir and _probe_local(module, project_dir, src_dirs):
+        return module, None
 
-        # 檢查 src_dirs
-        if src_dirs:
-            for src in src_dirs:
-                src_path = os.path.join(project_dir, src)
-                if not os.path.exists(src_path):
-                    continue
-
-                # 單檔案模組
-                module_file = os.path.join(src_path, f"{base_module}.py")
-                if os.path.exists(module_file):
-                    return module, None
-
-                # 套件目錄
-                module_dir = os.path.join(src_path, base_module, "__init__.py")
-                if os.path.exists(module_dir):
-                    return module, None
-
-                # 檢查子模組 (如 a.b.c)
-                if len(module_parts) > 1:
-                    submodule_path = os.path.join(src_path, base_module)
-                    for part in module_parts[1:]:
-                        submodule_path = os.path.join(submodule_path, part)
-
-                    submodule_py = os.path.join(os.path.dirname(submodule_path), f"{part}.py")
-                    submodule_init = os.path.join(submodule_path, "__init__.py")
-                    if os.path.exists(submodule_py):
-                        return module, None
-                    if os.path.exists(submodule_init):
-                        return module, None
+    # L4: sys.path + extra_paths 檔案系統 fallback
+    if _probe_sys_path(module, extra_paths):
+        return module, None
 
     return module, t("imports.error.module_not_found", module)
 
@@ -489,42 +784,11 @@ def check_module_importable(
     if not MODULE_NAME_PATTERN.match(module):
         return module, t("imports.error.invalid_module_name", module)
 
-    # 真實執行 import (subprocess 隔離)
-    env = os.environ.copy()
-
-    # 組合所有路徑
-    paths: list[str] = []
-    if project_dir:
-        paths.append(project_dir)
-        # 加入 src_dirs
-        if src_dirs:
-            for src in src_dirs:
-                full_path = os.path.join(project_dir, src)
-                if os.path.isdir(full_path):
-                    paths.append(full_path)
-
-    if paths:
-        current = env.get("PYTHONPATH", "")
-        env["PYTHONPATH"] = os.pathsep.join(paths + ([current] if current else []))
-
-    # 取得 Python 執行檔
-    python_exec = find_python_executable(venv_path)
+    sandbox_env, python_exec = _build_sandbox_env(project_dir, src_dirs, venv_path)
+    import_script = IMPORT_CHECK_SCRIPT.format(module=module)
 
     try:
-        # 使用 subprocess 隔離執行
-        # Sandbox 安全措施:
-        # 1. 移除敏感環境變數 (優化: 使用預定義的 frozenset)
-        sandbox_env = {k: v for k, v in env.items() if not any(k.startswith(prefix) for prefix in SENSITIVE_ENV_PREFIXES)}
-
-        # 2. 設定安全的環境變數
-        sandbox_env["PYTHONDONTWRITEBYTECODE"] = "1"  # 不寫入 .pyc
-        sandbox_env["PYTHONINSPECT"] = "0"  # 不進入交互模式
-        sandbox_env["PYTHONUNBUFFERED"] = "1"  # 不緩衝輸出
-
-        # 3. 使用受限的 import 檢查腳本 (優化: 使用預定義模板)
-        import_script = IMPORT_CHECK_SCRIPT.format(module=module)
-
-        # S603: subprocess call is safe - module name validated by regex at line 441
+        # S603: module name 已通過 MODULE_NAME_PATTERN regex 驗證
         result = subprocess.run(  # noqa: S603
             [python_exec, "-c", import_script],
             check=False,
@@ -584,33 +848,89 @@ def check_missing_modules(
         if module not in builtin_modules:
             modules_by_name[module].append(import_info)
 
+    # try/except ImportError 包住的模組 (全部使用點都 optional) → 跳過驗證
+    # 這是 Python 表達 optional dep 的標準寫法；missing 不算錯
+    all_optional_modules: set[str] = {mod for mod, infos in modules_by_name.items() if all(info.get("optional", False) for info in infos)}
+    for mod in all_optional_modules:
+        del modules_by_name[mod]
+
     unique_modules = list(modules_by_name.keys())
     if not unique_modules:
         return {}
 
-    max_workers = max_workers or calculate_optimal_workers(len(unique_modules))
-
-    # 並行檢查
     missing_modules: dict[str, list[dict]] = {}
 
-    # 選擇檢查方式
-    check_func = check_module_importable_static if use_static else check_module_importable
+    def _record_error(mod: str, err: str) -> None:
+        # 同模組混合 optional/required 使用: 只報 required 那些 (avoid 雜訊)
+        # 全 optional 已被 all_optional_modules 在前面過濾掉，此處 required_infos 必非空
+        required_infos = [info for info in modules_by_name[mod] if not info.get("optional", False)]
+        for info in required_infos:
+            info["error"] = err
+        missing_modules[mod] = required_infos
 
-    with ThreadPoolExecutor(max_workers=max_workers) as executor:
-        if use_static:
-            # 靜態檢查不需要 timeout 和 venv_path
-            futures = {executor.submit(check_func, m, project_dir, src_dirs): m for m in unique_modules}
-        else:
-            # 真實執行需要 timeout 和 venv_path
-            futures = {executor.submit(check_func, m, project_dir, src_dirs, timeout, venv_path): m for m in unique_modules}  # type: ignore[call-arg]
+    if use_static:
+        # 靜態模式: 4 層 probe + mtime cache
+        # 計算 effective_sys_path = project src + venv site-packages + 當前 sys.path
+        # 這個 list 同時用於 cache 簽名與 probe extra_paths
+        effective_sys_path: list[str] = []
+        if project_dir and src_dirs:
+            for src in src_dirs:
+                p = os.path.join(project_dir, src)
+                if os.path.exists(p):
+                    effective_sys_path.append(p)
+            effective_sys_path.append(project_dir)
+        # --venv 指定的外部虛擬環境 site-packages
+        venv_extra: list[str] = _venv_site_packages(venv_path) if venv_path else []
+        effective_sys_path.extend(venv_extra)
+        # 簽名也納入當前 sys.path 確保 venv 切換能 invalidate
+        cache_signature_paths = list(effective_sys_path) + list(sys.path)
+        cache = _FindSpecCache(project_dir, cache_signature_paths)
 
-        for future in as_completed(futures):
-            module, error = future.result()
+        # extra_paths 同時用於 probe (尊重 --venv)
+        probe_extra = venv_extra or None
+
+        # 先掃 cache 命中,沒命中的才丟並行
+        to_check: list[str] = []
+        for m in unique_modules:
+            cached = cache.get(m)
+            if cached is None:
+                to_check.append(m)
+            elif not cached[0]:
+                _record_error(m, cached[1] or "Module not found")
+
+        if to_check:
+            workers = max_workers or calculate_optimal_workers(len(to_check))
+            if should_use_thread_pool(len(to_check), work_kind="cpu"):
+                with ThreadPoolExecutor(max_workers=workers) as executor:
+                    futures = {executor.submit(check_module_importable_static, m, project_dir, src_dirs, probe_extra): m for m in to_check}
+                    for future in as_completed(futures):
+                        module, error = future.result()
+                        cache.set(module, error)
+                        if error:
+                            _record_error(module, error)
+            else:
+                for m in to_check:
+                    module, error = check_module_importable_static(m, project_dir, src_dirs, probe_extra)
+                    cache.set(module, error)
+                    if error:
+                        _record_error(module, error)
+        cache.flush()
+        return missing_modules
+
+    # 執行模式必須維持每個模組獨立 subprocess，避免前一個 import 污染後續結果。
+    workers = max_workers or calculate_optimal_workers(len(unique_modules))
+    if should_use_thread_pool(len(unique_modules), work_kind="io"):
+        with ThreadPoolExecutor(max_workers=workers) as executor:
+            futures = {executor.submit(check_module_importable, m, project_dir, src_dirs, timeout, venv_path): m for m in unique_modules}
+            for future in as_completed(futures):
+                module, error = future.result()
+                if error:
+                    _record_error(module, error)
+    else:
+        for m in unique_modules:
+            module, error = check_module_importable(m, project_dir, src_dirs, timeout, venv_path)
             if error:
-                # 加入錯誤訊息到每個 import_info
-                for info in modules_by_name[module]:
-                    info["error"] = error
-                missing_modules[module] = modules_by_name[module]
+                _record_error(module, error)
 
     return missing_modules
 
@@ -624,27 +944,27 @@ def print_results(
 ) -> bool:
     """輸出結果."""
     has_issues = False
+    total_errors = 0
 
     if args.check_relative and all_relative_imports:
         has_issues = True
         for rel_import in all_relative_imports:
-            if not args.quiet:
-                print(t("imports.standalone.relative_warning", rel_import["file"], rel_import["line"], rel_import["statement"]))
+            # 錯誤訊息不受 --quiet 影響,總是顯示
+            print(t("imports.standalone.relative_warning", rel_import["file"], rel_import["line"], rel_import["statement"]))
 
     if missing_modules:
         has_issues = True
-        total_errors = 0
         for module, import_list in sorted(missing_modules.items()):
             for import_info in import_list:
                 file_path = import_info["file"]
                 error_msg = import_info.get("error", "Module not found")
-                if not args.quiet:
-                    rel_path = safe_relpath(file_path, args.project_path)
-                    print(t("imports.standalone.load_failed", module))
-                    print(t("imports.standalone.file_line", rel_path, import_info["line"]))
-                    print(t("imports.standalone.statement", import_info["statement"]))
-                    print(t("imports.standalone.reason", error_msg))
-                    print()
+                # 錯誤訊息不受 --quiet 影響,總是顯示
+                rel_path = safe_relpath(file_path, args.project_path)
+                print(t("imports.standalone.load_failed", module))
+                print(t("imports.standalone.file_line", rel_path, import_info["line"]))
+                print(t("imports.standalone.statement", import_info["statement"]))
+                print(t("imports.standalone.reason", error_msg))
+                print()
                 total_errors += 1
 
     if not args.quiet:
@@ -737,6 +1057,7 @@ def main() -> None:
     )
 
     # 動態 import
+    has_dynamic_error = False
     if args.entry:
         if not args.quiet:
             print(t("imports.standalone.run_dynamic", args.entry))
@@ -745,9 +1066,11 @@ def main() -> None:
             for module in dynamic_imports:
                 all_imports.append({"module": module, "line": 0, "statement": f"Dynamic load: {module}", "file": args.entry, "type": "dynamic"})
         except Exception as e:
-            print(f"❌ 執行入口檔案失敗: {args.entry}")
-            print(f"   錯誤: {e}")
-            sys.exit(1)
+            has_dynamic_error = True
+            # 錯誤訊息不受 --quiet 影響,總是顯示
+            print(t("imports.standalone.dynamic_error", args.entry))
+            print(t("imports.standalone.reason", str(e)))
+            print()
 
     unique_modules = {imp["module"] for imp in all_imports}
 
@@ -767,7 +1090,7 @@ def main() -> None:
     total_time = time.time() - start_time
 
     has_issues = print_results(missing_modules, all_relative_imports, args, total_time, unique_modules)
-    sys.exit(1 if has_issues else 0)
+    sys.exit(1 if (has_issues or has_dynamic_error) else 0)
 
 
 if __name__ == "__main__":
