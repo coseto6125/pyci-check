@@ -41,3 +41,7 @@ htmlcov/
 # OS
 .DS_Store
 Thumbs.db
+.claude/*
+CLAUDE.md
+AGENTS.md
+

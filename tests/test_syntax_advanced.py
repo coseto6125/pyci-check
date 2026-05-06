@@ -1,9 +1,6 @@
 """語法檢查進階測試."""
 
-import os
 from pathlib import Path
-
-import pytest
 
 from pyci_check.syntax import check_file_syntax, check_files_parallel, find_python_files
 
@@ -222,13 +219,8 @@ def http_error(status):
         test_file = temp_dir / "match.py"
         test_file.write_text(code, encoding="utf-8")
 
-        is_valid, error = check_file_syntax(str(test_file))
+        is_valid, _error = check_file_syntax(str(test_file))
 
         # 根據 Python 版本決定結果
-        import sys
 
-        if sys.version_info >= (3, 10):
-            assert is_valid is True
-        else:
-            # Python 3.9 及以下版本不支援 match
-            assert is_valid is False
+        assert is_valid is True
