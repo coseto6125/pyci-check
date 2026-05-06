@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-from pyci_check.imports import check_module_importable_static
+from pyci_check.imports import check_missing_modules, check_module_importable_static
 
 
 def _make_pkg_with_side_effect(root: Path, pkg_name: str, side_effect_marker: Path) -> None:
@@ -86,6 +86,54 @@ def test_missing_module_reports_error(tmp_path: Path) -> None:
         project_dir=str(tmp_path),
     )
     assert error is not None, "找不到的模組應回報 module not found"
+
+
+def test_check_missing_modules_static_cache_reuses_results(tmp_path: Path) -> None:
+    """相同搜尋環境下，第二次檢查應可重用靜態 missing cache."""
+
+    def make_imports() -> list[dict]:
+        return [
+            {
+                "module": "missing_dep_cached_xyz",
+                "line": 1,
+                "statement": "import missing_dep_cached_xyz",
+                "file": str(tmp_path / "f.py"),
+                "type": "absolute",
+                "optional": False,
+            },
+        ]
+
+    first = check_missing_modules(make_imports(), project_dir=str(tmp_path), use_static=True)
+    cache_file = tmp_path / ".pyci-check-cache" / "find_spec.json"
+    second = check_missing_modules(make_imports(), project_dir=str(tmp_path), use_static=True)
+
+    assert cache_file.exists()
+    assert first == second
+
+
+def test_check_missing_modules_static_cache_invalidates_on_signature_change(tmp_path: Path, monkeypatch) -> None:
+    """sys.path 簽章改變後，不應重用舊的 missing cache."""
+    lib_dir = tmp_path / "lib"
+    lib_dir.mkdir()
+    imports = [
+        {
+            "module": "dynamic_mod_xyz",
+            "line": 1,
+            "statement": "import dynamic_mod_xyz",
+            "file": str(tmp_path / "f.py"),
+            "type": "absolute",
+            "optional": False,
+        },
+    ]
+
+    missing_before = check_missing_modules([info.copy() for info in imports], project_dir=str(tmp_path), use_static=True)
+
+    (lib_dir / "dynamic_mod_xyz.py").write_text("VALUE = 1\n", encoding="utf-8")
+    monkeypatch.syspath_prepend(str(lib_dir))
+    missing_after = check_missing_modules([info.copy() for info in imports], project_dir=str(tmp_path), use_static=True)
+
+    assert "dynamic_mod_xyz" in missing_before
+    assert missing_after == {}
 
 
 def test_stdlib_check_is_constant_time_and_silent(tmp_path: Path) -> None:
@@ -220,8 +268,6 @@ except (ImportError, OSError):
 
 def test_optional_module_missing_does_not_report(tmp_path: Path) -> None:
     """check_missing_modules 對全 optional 模組的 missing 不該回報."""
-    from pyci_check.imports import check_missing_modules
-
     # 模擬: 兩個 import_info 全部標 optional
     imports = [
         {
@@ -239,8 +285,6 @@ def test_optional_module_missing_does_not_report(tmp_path: Path) -> None:
 
 def test_required_module_still_reports_when_missing(tmp_path: Path) -> None:
     """混合 optional / required: required 那條仍要回報."""
-    from pyci_check.imports import check_missing_modules
-
     imports = [
         {
             "module": "totally_not_installed_xyz_abc",
@@ -269,8 +313,6 @@ def test_required_module_still_reports_when_missing(tmp_path: Path) -> None:
 
 def test_execute_mode_isolates_each_import_from_sys_modules_pollution(tmp_path: Path) -> None:
     """Execute 模式中，前一個 import 不可污染後一個模組的檢查結果."""
-    from pyci_check.imports import check_missing_modules
-
     (tmp_path / "evil.py").write_text(
         "import sys, types\nsys.modules['missing_dep_xyz'] = types.ModuleType('missing_dep_xyz')\n",
         encoding="utf-8",

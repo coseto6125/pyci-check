@@ -5,6 +5,7 @@ import sys
 import sysconfig
 from functools import lru_cache
 
+
 # Free-threaded build 偵測 (PEP 703, **Python 3.13t / 3.14t / ...** — 必須是含 't' 後綴的 build)。
 # 條件:
 #   1. Python >= 3.13 (PEP 703 最早的 free-threaded build)
@@ -13,7 +14,12 @@ from functools import lru_cache
 # 注意: 一般 3.13/3.14/3.15 等非 't' 後綴的 build 仍有 GIL,此值為 False。
 # True 時 ThreadPoolExecutor 為真並行 (CPU-bound 工作自動受益);
 # False 時 ThreadPool 只對 I/O / subprocess 有用。
-IS_FREE_THREADED: bool = sys.version_info >= (3, 13) and sysconfig.get_config_var("Py_GIL_DISABLED") == 1
+def _is_free_threaded_build() -> bool:
+    """回傳目前 interpreter 是否為 free-threaded build."""
+    return sys.version_info >= (3, 13) and str(sysconfig.get_config_var("Py_GIL_DISABLED")) == "1"
+
+
+IS_FREE_THREADED: bool = _is_free_threaded_build()
 
 
 def should_use_thread_pool(task_count: int, work_kind: str = "cpu") -> bool:
@@ -101,7 +107,7 @@ def walk_python_files(
     走訪目錄收集 .py 檔案，於 walk 過程 prune 排除目錄、跳過符號連結.
 
     一次 os.walk 解決三件事:
-    1. exclude_dirs prune + dot-prefix 目錄跳過 (與 glob 預設 hidden=False 行為一致)
+    1. exclude_dirs prune
     2. followlinks=False 自動跳過符號連結目錄 (不需事後 lstat)
     3. ignore_files 過濾
 
@@ -117,8 +123,8 @@ def walk_python_files(
     """
     python_files: list[str] = []
     for dirpath, dirnames, filenames in os.walk(directory, followlinks=False):
-        # In-place prune: 排除集合 + dot-prefix (.venv/.git/.venv-ft 等保持與 glob 預設行為一致)
-        dirnames[:] = [d for d in dirnames if not d.startswith(".") and d not in exclude_dirs]
+        # In-place prune: 只排除明確列出的目錄，保留使用者可掃描其他 dot-dir 的能力。
+        dirnames[:] = [d for d in dirnames if d not in exclude_dirs]
         python_files.extend(os.path.join(dirpath, f) for f in filenames if f.endswith(".py") and f not in ignore_files)
 
     python_files.sort()
