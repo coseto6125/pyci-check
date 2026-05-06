@@ -14,12 +14,10 @@ import contextlib
 import hashlib
 import json
 import os
-import queue
 import re
 import runpy
 import subprocess
 import sys
-import threading
 import time
 import tomllib
 from argparse import Namespace
@@ -50,94 +48,6 @@ except BaseException as e:
 sys.exit(0)
 """
 
-# Worker line protocol: stdin 讀模組名、stdout 回 OK 或 ERR<TAB>msg
-_WORKER_OK = "OK"
-_WORKER_ERR_PREFIX = "ERR\t"
-_WORKER_DIED = "worker died unexpectedly"
-_WORKER_STDIN_CLOSED = "worker stdin closed"
-
-# 模組級 print/stderr 重導 /dev/null 避免污染 line protocol
-_WORKER_SCRIPT = r"""
-import sys, os
-sys.dont_write_bytecode = True
-_out = sys.stdout
-sys.stdout = sys.stderr = open(os.devnull, 'w')
-def _emit(s):
-    _out.write(s + '\n')
-    _out.flush()
-for line in sys.stdin:
-    m = line.strip()
-    if not m:
-        continue
-    try:
-        __import__(m)
-        _emit('OK')
-    except BaseException as e:
-        msg = (str(e) or type(e).__name__).replace('\n', ' ').replace('\t', ' ')[:500]
-        _emit('ERR\t' + msg)
-"""
-
-
-class _PersistentImportWorker:
-    """常駐 Python subprocess，stdin 餵模組名、stdout 回 line protocol 結果."""
-
-    def __init__(self, python_exec: str, env: dict[str, str], cwd: str | None) -> None:
-        self.proc = subprocess.Popen(  # noqa: S603
-            [python_exec, "-c", _WORKER_SCRIPT],
-            stdin=subprocess.PIPE,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.DEVNULL,
-            env=env,
-            cwd=cwd,
-            text=True,
-            bufsize=1,
-        )
-        self._q: queue.Queue[str] = queue.Queue()
-        self._reader = threading.Thread(target=self._read_loop, daemon=True)
-        self._reader.start()
-
-    def _read_loop(self) -> None:
-        if self.proc.stdout is None:
-            return
-        for line in self.proc.stdout:
-            self._q.put(line.rstrip("\n"))
-
-    def check(self, module: str, timeout: float) -> str | None:
-        """回傳錯誤訊息 (None 表示成功)."""
-        if not MODULE_NAME_PATTERN.match(module):
-            return t("imports.error.invalid_module_name", module)
-        if self.proc.poll() is not None or self.proc.stdin is None:
-            return _WORKER_DIED
-        try:
-            self.proc.stdin.write(f"{module}\n")
-            self.proc.stdin.flush()
-        except (BrokenPipeError, OSError):
-            return _WORKER_STDIN_CLOSED
-        try:
-            line = self._q.get(timeout=timeout)
-        except queue.Empty:
-            self.terminate()
-            return t("imports.error.import_timeout", timeout)
-        if line == _WORKER_OK:
-            return None
-        if line.startswith(_WORKER_ERR_PREFIX):
-            return line[len(_WORKER_ERR_PREFIX):]
-        return f"unexpected worker output: {line}"
-
-    def terminate(self) -> None:
-        try:
-            if self.proc.stdin and not self.proc.stdin.closed:
-                self.proc.stdin.close()
-        except OSError:
-            pass
-        try:
-            self.proc.terminate()
-            self.proc.wait(timeout=1)
-        except (subprocess.TimeoutExpired, OSError):
-            with contextlib.suppress(OSError):
-                self.proc.kill()
-
-
 class _FindSpecCache:
     """
     find_spec 結果按 sys.path 內容 + mtime 做快取.
@@ -147,6 +57,7 @@ class _FindSpecCache:
     """
 
     FILENAME = "find_spec.json"
+    VERSION = 2
 
     def __init__(self, project_dir: str | None, sys_path: list[str]) -> None:
         self.disabled = project_dir is None
@@ -179,7 +90,7 @@ class _FindSpecCache:
                 data = json.load(f)
         except (OSError, ValueError):
             return
-        if data.get("signature") == self.signature:
+        if data.get("version") == self.VERSION and data.get("signature") == self.signature:
             self._data = data.get("results", {})
 
     def get(self, module: str) -> tuple[bool, str | None] | None:
@@ -201,7 +112,7 @@ class _FindSpecCache:
         try:
             os.makedirs(self.cache_dir, exist_ok=True)
             with open(self.cache_file, "w", encoding="utf-8") as f:
-                json.dump({"signature": self.signature, "results": self._data}, f)
+                json.dump({"version": self.VERSION, "signature": self.signature, "results": self._data}, f)
         except OSError:
             # 寫入失敗不影響檢查結果
             pass
@@ -547,10 +458,16 @@ def extract_from_all_files(
     all_imports: list[dict] = []
     all_relative_imports: list[dict] = []
 
-    with ThreadPoolExecutor(max_workers=max_workers) as executor:
-        futures = {executor.submit(process_single_file, fp): fp for fp in python_files}
-        for future in as_completed(futures):
-            imports, relative_imports = future.result()
+    if should_use_thread_pool(len(python_files), work_kind="cpu"):
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            futures = {executor.submit(process_single_file, fp): fp for fp in python_files}
+            for future in as_completed(futures):
+                imports, relative_imports = future.result()
+                all_imports.extend(imports)
+                all_relative_imports.extend(relative_imports)
+    else:
+        for file_path in python_files:
+            imports, relative_imports = process_single_file(file_path)
             all_imports.extend(imports)
             all_relative_imports.extend(relative_imports)
 
@@ -703,12 +620,10 @@ def _installed_top_levels() -> frozenset[str]:
     return frozenset(names)
 
 
-def _probe_local(module: str, project_dir: str, src_dirs: list[str] | None) -> bool:
-    """檢查 project_dir + src_dirs 內是否存在該模組 (檔案系統純 probe)."""
+def _probe_module_roots(module: str, roots: list[str]) -> bool:
+    """檢查 roots 內是否存在 dotted module (檔案系統純 probe)."""
     parts = module.split(".")
-    roots = [project_dir]
-    if src_dirs:
-        roots.extend(os.path.join(project_dir, s) for s in src_dirs)
+    suffixes = _module_file_suffixes()
 
     for root in roots:
         if not os.path.isdir(root):
@@ -717,12 +632,12 @@ def _probe_local(module: str, project_dir: str, src_dirs: list[str] | None) -> b
         cur = root
         for i, part in enumerate(parts):
             is_last = i == len(parts) - 1
-            file_path = os.path.join(cur, f"{part}.py")
             dir_path = os.path.join(cur, part)
             if is_last:
-                # 葉子: 接受 .py / 套件目錄 / namespace package 目錄
-                if os.path.isfile(file_path):
-                    return True
+                # 葉子: 接受 .py / C extension / 套件目錄 / namespace package 目錄
+                for suffix in suffixes:
+                    if os.path.isfile(os.path.join(cur, part + suffix)):
+                        return True
                 if os.path.isdir(dir_path):
                     return True
                 break
@@ -732,6 +647,14 @@ def _probe_local(module: str, project_dir: str, src_dirs: list[str] | None) -> b
                 continue
             break
     return False
+
+
+def _probe_local(module: str, project_dir: str, src_dirs: list[str] | None) -> bool:
+    """檢查 project_dir + src_dirs 內是否存在該模組 (檔案系統純 probe)."""
+    roots = [project_dir]
+    if src_dirs:
+        roots.extend(os.path.join(project_dir, s) for s in src_dirs)
+    return _probe_module_roots(module, roots)
 
 
 # .py + 當前 Python 的 C extension 後綴 (含 ABI tag / platform tag)
@@ -757,24 +680,14 @@ def _venv_site_packages(venv_path: str) -> list[str]:
     return candidates
 
 
-# 大量 dotted import 共享同一 top-level (e.g. 50 條 enoract.*) → 掃描結果可重用
+# 大量 dotted import 共享同一路徑查找 → 掃描結果可重用
 @lru_cache(maxsize=512)
-def _probe_sys_path_cached(top_level: str, paths_tuple: tuple[str, ...]) -> bool:
-    suffixes = _module_file_suffixes()
-    for entry in paths_tuple:
-        base = entry or os.getcwd()
-        try:
-            for suffix in suffixes:
-                if os.path.isfile(os.path.join(base, top_level + suffix)):
-                    return True
-            if os.path.isdir(os.path.join(base, top_level)):
-                return True
-        except OSError:
-            continue
-    return False
+def _probe_sys_path_cached(module: str, paths_tuple: tuple[str, ...]) -> bool:
+    roots = [entry or os.getcwd() for entry in paths_tuple]
+    return _probe_module_roots(module, roots)
 
 
-def _probe_sys_path(top_level: str, extra_paths: list[str] | None = None) -> bool:
+def _probe_sys_path(module: str, extra_paths: list[str] | None = None) -> bool:
     """
     掃 sys.path (+ extra_paths) 各 entry 純檔案系統檢查; 不觸發任何 finder 或 __init__.py.
 
@@ -786,12 +699,12 @@ def _probe_sys_path(top_level: str, extra_paths: list[str] | None = None) -> boo
     - 透過 --venv 指定的外部虛擬環境 site-packages
 
     Args:
-        top_level: 模組 top-level 名稱
+        module: 模組名稱
         extra_paths: 額外掃描路徑 (例如 --venv 指定的 site-packages)
     """
     # tuple 化 paths 才能進 lru_cache
     paths_tuple = (*extra_paths, *sys.path) if extra_paths else tuple(sys.path)
-    return _probe_sys_path_cached(top_level, paths_tuple)
+    return _probe_sys_path_cached(module, paths_tuple)
 
 
 def check_module_importable_static(
@@ -828,8 +741,8 @@ def check_module_importable_static(
     if top in _stdlib_top_levels():
         return module, None
 
-    # L2: 已安裝第三方 (僅在無 extra_paths 時可信; 有 --venv 時要看 venv site-packages)
-    if not extra_paths and top in _installed_top_levels():
+    # L2: 已安裝第三方 top-level (dotted submodule 需走後續檔案系統深度 probe)
+    if "." not in module and not extra_paths and top in _installed_top_levels():
         return module, None
 
     # L3: 專案 local (能定位到 dotted 葉子節點)
@@ -837,7 +750,7 @@ def check_module_importable_static(
         return module, None
 
     # L4: sys.path + extra_paths 檔案系統 fallback
-    if _probe_sys_path(top, extra_paths):
+    if _probe_sys_path(module, extra_paths):
         return module, None
 
     return module, t("imports.error.module_not_found", module)
@@ -1004,24 +917,23 @@ def check_missing_modules(
         cache.flush()
         return missing_modules
 
-    # 執行模式: 單一 persistent worker 序列發送，省 N-1 次 subprocess fork
-    sandbox_env, python_exec = _build_sandbox_env(project_dir, src_dirs, venv_path)
-    dead_signals = (_WORKER_DIED, _WORKER_STDIN_CLOSED)
-    worker = _PersistentImportWorker(python_exec, sandbox_env, project_dir)
-    try:
+    # 執行模式必須維持每個模組獨立 subprocess，避免前一個 import 污染後續結果。
+    workers = max_workers or calculate_optimal_workers(len(unique_modules))
+    if should_use_thread_pool(len(unique_modules), work_kind="io"):
+        with ThreadPoolExecutor(max_workers=workers) as executor:
+            futures = {
+                executor.submit(check_module_importable, m, project_dir, src_dirs, timeout, venv_path): m
+                for m in unique_modules
+            }
+            for future in as_completed(futures):
+                module, error = future.result()
+                if error:
+                    _record_error(module, error)
+    else:
         for m in unique_modules:
-            error = worker.check(m, timeout=timeout)
-            # worker 死亡: terminate 舊 worker (修復 leak) 後重啟
-            if error in dead_signals or worker.proc.poll() is not None:
-                worker.terminate()
-                worker = _PersistentImportWorker(python_exec, sandbox_env, project_dir)
-                if error and error not in dead_signals:
-                    _record_error(m, error)
-                continue
-            if error is not None:
-                _record_error(m, error)
-    finally:
-        worker.terminate()
+            module, error = check_module_importable(m, project_dir, src_dirs, timeout, venv_path)
+            if error:
+                _record_error(module, error)
 
     return missing_modules
 

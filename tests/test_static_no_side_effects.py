@@ -100,18 +100,17 @@ def test_installed_package_top_level_recognized(tmp_path: Path) -> None:
     assert error is None, f"pytest 應被識別為已安裝，實際: {error}"
 
 
-def test_installed_package_unknown_submodule_does_not_execute(tmp_path: Path) -> None:
+def test_installed_package_unknown_submodule_reports_missing_without_executing_parent(tmp_path: Path) -> None:
     """
-    檢查已裝套件的子模組路徑時，即便該子模組不存在也不該觸發父 package import.
+    檢查已裝套件的子模組路徑時，不能只因 top-level package 存在就通過.
 
-    pytest.this_does_not_exist: top-level pytest 已安裝 → L2 命中回 OK
-    重點是這個過程沒 import pytest (pytest import 本身有 plugin discovery 副作用)。
+    同時不能 import pytest parent package，避免 plugin discovery 等副作用。
     """
     # 監看 sys.modules: 檢查前後不能多出 'pytest' (若已存在則不能變化)
     before = "pytest" in sys.modules
     _module, error = check_module_importable_static("pytest.does_not_exist_subname", project_dir=str(tmp_path))
     after = "pytest" in sys.modules
-    assert error is None, "L2 命中即視為通過 (深度驗證留給 --execute)"
+    assert error is not None, "已安裝套件的不存在子模組應回報 missing"
     if not before:
         assert not after, "靜態檢查不該真的 import pytest"
 
@@ -263,6 +262,40 @@ def test_required_module_still_reports_when_missing(tmp_path: Path) -> None:
     reported_lines = {info["line"] for info in missing["totally_not_installed_xyz_abc"]}
     assert 5 in reported_lines
     assert 1 not in reported_lines, "optional 那條不該入回報"
+
+
+def test_execute_mode_isolates_each_import_from_sys_modules_pollution(tmp_path: Path) -> None:
+    """Execute 模式中，前一個 import 不可污染後一個模組的檢查結果."""
+    from pyci_check.imports import check_missing_modules
+
+    (tmp_path / "evil.py").write_text(
+        "import sys, types\n"
+        "sys.modules['missing_dep_xyz'] = types.ModuleType('missing_dep_xyz')\n",
+        encoding="utf-8",
+    )
+    imports = [
+        {
+            "module": "evil",
+            "line": 1,
+            "statement": "import evil",
+            "file": str(tmp_path / "f.py"),
+            "type": "absolute",
+            "optional": False,
+        },
+        {
+            "module": "missing_dep_xyz",
+            "line": 2,
+            "statement": "import missing_dep_xyz",
+            "file": str(tmp_path / "f.py"),
+            "type": "absolute",
+            "optional": False,
+        },
+    ]
+
+    missing = check_missing_modules(imports, project_dir=str(tmp_path), use_static=False, timeout=5)
+
+    assert "evil" not in missing
+    assert "missing_dep_xyz" in missing
 
 
 if __name__ == "__main__":
