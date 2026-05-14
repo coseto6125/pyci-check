@@ -1,11 +1,10 @@
 """測試：本地簽章驗證."""
 
-import pytest
-import os
 import argparse
 from pathlib import Path
+
 from pyci_check.cli import check_signature
-from pyci_check.signature import check_signatures, _get_module_name
+from pyci_check.signature import _get_module_name
 
 
 def test_get_module_name():

@@ -7,8 +7,7 @@
 
 import ast
 import os
-from dataclasses import dataclass, field
-from typing import Dict, List, Set, Tuple, Optional
+from dataclasses import dataclass
 
 
 @dataclass
@@ -19,15 +18,15 @@ class Signature:
     name: str
     min_pos: int
     max_pos: int  # -1 代表無限 (有 *args)
-    pos_arg_names: Set[str]
-    kwonly_args: Set[str]
-    required_kwonly: Set[str]
+    pos_arg_names: set[str]
+    kwonly_args: set[str]
+    required_kwonly: set[str]
     has_varargs: bool
     has_varkw: bool
     is_method: bool = False
 
     @property
-    def all_arg_names(self) -> Set[str]:
+    def all_arg_names(self) -> set[str]:
         return self.pos_arg_names | self.kwonly_args
 
 
@@ -37,8 +36,8 @@ class DefinitionCollector(ast.NodeVisitor):
     def __init__(self, module_name: str):
         self.module_name = module_name
         # name -> Signature
-        self.signatures: Dict[str, Signature] = {}
-        self.current_class: Optional[str] = None
+        self.signatures: dict[str, Signature] = {}
+        self.current_class: str | None = None
 
     def visit_ClassDef(self, node: ast.ClassDef):
         prev_class = self.current_class
@@ -46,16 +45,13 @@ class DefinitionCollector(ast.NodeVisitor):
 
         # 檢查是否為 dataclass
         is_dataclass = any(
-            isinstance(d, ast.Name) and d.id == "dataclass" or isinstance(d, ast.Call) and getattr(d.func, "id", "") == "dataclass"
+            (isinstance(d, ast.Name) and d.id == "dataclass") or (isinstance(d, ast.Call) and getattr(d.func, "id", "") == "dataclass")
             for d in node.decorator_list
         )
 
         if is_dataclass:
             # 蒐集所有的 field
-            fields = []
-            for stmt in node.body:
-                if isinstance(stmt, ast.AnnAssign) and isinstance(stmt.target, ast.Name):
-                    fields.append(stmt.target.id)
+            fields = [stmt.target.id for stmt in node.body if isinstance(stmt, ast.AnnAssign) and isinstance(stmt.target, ast.Name)]
 
             self.signatures[node.name] = Signature(
                 module=self.module_name,
@@ -115,7 +111,7 @@ class DefinitionCollector(ast.NodeVisitor):
 
         # Keyword-only
         kwonly_args = {a.arg for a in node.args.kwonlyargs}
-        kw_defaults_count = sum(1 for d in node.args.kw_defaults if d is not None)
+        sum(1 for d in node.args.kw_defaults if d is not None)
         required_kwonly = {a.arg for a, d in zip(node.args.kwonlyargs, node.args.kw_defaults) if d is None}
 
         has_varargs = node.args.vararg is not None
@@ -153,15 +149,15 @@ class DefinitionCollector(ast.NodeVisitor):
 class CallValidator(ast.NodeVisitor):
     """第二階段：驗證檔案內的函數呼叫."""
 
-    def __init__(self, filepath: str, module_name: str, global_signatures: Dict[str, Signature]):
+    def __init__(self, filepath: str, module_name: str, global_signatures: dict[str, Signature]):
         self.filepath = filepath
         self.module_name = module_name
         self.global_signatures = global_signatures
-        self.errors: List[dict] = []
+        self.errors: list[dict] = []
 
         # 追蹤檔案內的 import： local_name -> fully_qualified_name
         # e.g., "safe_relpath" -> "pyci_check.utils.safe_relpath"
-        self.imports: Dict[str, str] = {}
+        self.imports: dict[str, str] = {}
 
     def visit_Import(self, node: ast.Import):
         for alias in node.names:
@@ -189,7 +185,7 @@ class CallValidator(ast.NodeVisitor):
             # 2. 可能是同一個檔案內定義的 (module.func)
             return f"{self.module_name}.{node.id}"
 
-        elif isinstance(node, ast.Attribute):
+        if isinstance(node, ast.Attribute):
             # 例如 os.path.join -> 我們先解析 os.path
             base = self._resolve_name(node.value)
             if base:
@@ -269,7 +265,7 @@ class CallValidator(ast.NodeVisitor):
                 f"You must explicitly pass the following arguments as keyword arguments (e.g., param=value): {', '.join(missing_kwonly)}.",
             )
 
-    def _report(self, lineno: int, func: str, error_msg: str, sig: Signature, provided_pos: int, provided_kws: Set[str], hint: str):
+    def _report(self, lineno: int, func: str, error_msg: str, sig: Signature, provided_pos: int, provided_kws: set[str], hint: str):
         # 建立 Expected Signature 字串
         pos_info = f"pos_args: {sig.min_pos}" if sig.min_pos == sig.max_pos else f"pos_args: {sig.min_pos}~{sig.max_pos}"
         if sig.max_pos == -1:
@@ -287,7 +283,7 @@ class CallValidator(ast.NodeVisitor):
         self.errors.append({"file": self.filepath, "line": lineno, "func": func, "reason": detailed_reason})
 
 
-def _get_module_name(filepath: str, project_dir: str, src_dirs: List[str]) -> str:
+def _get_module_name(filepath: str, project_dir: str, src_dirs: list[str]) -> str:
     """將檔案路徑轉換為模組名稱."""
     abs_fp = os.path.abspath(filepath)
     roots = [os.path.abspath(project_dir)]
@@ -303,7 +299,7 @@ def _get_module_name(filepath: str, project_dir: str, src_dirs: List[str]) -> st
     return best_mod or os.path.basename(filepath).removesuffix(".py")
 
 
-def check_signatures(python_files: List[str], project_dir: str, src_dirs: List[str]) -> List[dict]:
+def check_signatures(python_files: list[str], project_dir: str, src_dirs: list[str]) -> list[dict]:
     """
     掃描專案，執行本地簽章驗證.
 
@@ -313,7 +309,7 @@ def check_signatures(python_files: List[str], project_dir: str, src_dirs: List[s
     from pyci_check.imports import read_file_with_encoding
 
     # 1. 收集所有的簽章 (Full Qualified Name -> Signature)
-    global_signatures: Dict[str, Signature] = {}
+    global_signatures: dict[str, Signature] = {}
     file_asts = {}
     file_modules = {}
 
