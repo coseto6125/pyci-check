@@ -12,6 +12,8 @@ TRANSLATIONS = {
     "cli.help.subcommand": "Subcommand",
     "cli.help.syntax": "Check Python syntax",
     "cli.help.imports": "Check import dependencies",
+    "cli.help.dependency": "Check dependency health (Phantom/Orphan)",
+    "cli.help.cycles": "Check import cycles",
     "cli.help.install_hooks": "Install Git hooks",
     "cli.help.uninstall_hooks": "Remove Git hooks",
     "cli.help.hook_type": "Hook type (default: pre-commit)",
@@ -45,10 +47,31 @@ TRANSLATIONS = {
     "imports.success": "✓ All import dependencies are correct",
     "imports.summary.failed_modules": "Failed modules: {}",
     "imports.summary.total_errors": "Total errors: {}",
+    # Dependency check
+    "dependency.checking": "Checking dependency health...",
+    "dependency.phantom": "❌ Phantom dependencies (Used but not declared):",
+    "dependency.orphan": "⚠️  Orphan dependencies (Declared but not used):",
+    "dependency.success": "✓ Dependency health is good",
+    # Cycle check
+    "cycles.checking": "Checking import cycles...",
+    "cycles.found": "❌ Found {} import cycles:",
+    "cycles.success": "✓ No import cycles found",
+    # Side Effects check
+    "side_effects.checking": "Checking global side effects...",
+    "side_effects.found": "⚠️  Found {} global side effects (Warning only):",
+    "side_effects.success": "✓ No global side effects found",
+    # Dead Code check
+    "deadcode.checking": "Scanning for dead code...",
+    "deadcode.found": "⚠️  Found {} potential dead code definitions (Warning only):",
+    "deadcode.success": "✓ No dead code found",
     # Check all
     "check_all.start": "Starting checks...",
-    "check_all.syntax_phase": "[1/2] Syntax check",
-    "check_all.imports_phase": "[2/2] Import check",
+    "check_all.syntax_phase": "[1/6] Syntax check",
+    "check_all.imports_phase": "[2/6] Import check",
+    "check_all.dependency_phase": "[3/6] Dependency health check",
+    "check_all.cycles_phase": "[4/6] Import cycle check",
+    "check_all.side_effects_phase": "[5/6] Global side effects check (Warning only)",
+    "check_all.deadcode_phase": "[6/6] Dead code scan (Warning only)",
     "check_all.success": "✓ All checks passed",
     "check_all.errors": "✗ Errors found",
     # Git hooks

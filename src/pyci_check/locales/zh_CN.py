@@ -12,6 +12,8 @@ TRANSLATIONS = {
     "cli.help.subcommand": "子命令",
     "cli.help.syntax": "检查 Python 语法",
     "cli.help.imports": "检查 import 依赖",
+    "cli.help.dependency": "检查依赖健康度 (幽灵/冗余依赖)",
+    "cli.help.cycles": "检查循环引用",
     "cli.help.install_hooks": "安装 Git hooks",
     "cli.help.uninstall_hooks": "移除 Git hooks",
     "cli.help.hook_type": "Hook 类型 (默认: pre-commit)",
@@ -45,11 +47,33 @@ TRANSLATIONS = {
     "imports.success": "✓ 所有 import 依赖正确",
     "imports.summary.failed_modules": "失败的模块数: {}",
     "imports.summary.total_errors": "总错误数量: {}",
+    # Dependency check
+    "dependency.checking": "检查依赖健康度...",
+    "dependency.phantom": "❌ 幽灵依赖 (已使用但未宣告):",
+    "dependency.orphan": "⚠️  冗余依赖 (已宣告但未使用):",
+    "dependency.success": "✓ 依赖健康度良好",
+    # Cycle check
+    "cycles.checking": "检查循环引用...",
+    "cycles.found": "❌ 发现 {} 个循环引用:",
+    "cycles.success": "✓ 未发现循环引用",
+    # Side Effects check
+    "side_effects.checking": "检查全局副作用...",
+    "side_effects.found": "⚠️  发现 {} 个全局副作用 (仅警告):",
+    "side_effects.success": "✓ 未发现全局副作用",
+    # Dead Code check
+    "deadcode.checking": "扫描深层死代码...",
+    "deadcode.found": "⚠️  发现 {} 个可能未被使用的定义 (仅警告):",
+    "deadcode.success": "✓ 未发现死代码",
     # Check all
     "check_all.start": "开始执行检查...",
-    "check_all.syntax_phase": "[1/2] 语法检查",
-    "check_all.imports_phase": "[2/2] Import 检查",
+    "check_all.syntax_phase": "[1/6] 语法检查",
+    "check_all.imports_phase": "[2/6] Import 检查",
+    "check_all.dependency_phase": "[3/6] 依赖健康度检查",
+    "check_all.cycles_phase": "[4/6] 循环引用检查",
+    "check_all.side_effects_phase": "[5/6] 全局副作用检查 (仅警告)",
+    "check_all.deadcode_phase": "[6/6] 深层死代码扫描 (仅警告)",
     "check_all.success": "✓ 所有检查通过",
+
     "check_all.errors": "✗ 发现错误",
     # Git hooks
     "hooks.find_git_error": "错误: 找不到 .git 目录",

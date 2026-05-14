@@ -1,9 +1,11 @@
 """共用工具函數."""
 
+import fnmatch
 import os
 import sys
 import sysconfig
 from functools import lru_cache
+from pathlib import Path
 
 
 # Free-threaded build 偵測 (PEP 703, **Python 3.13t / 3.14t / ...** — 必須是含 't' 後綴的 build)。
@@ -83,19 +85,21 @@ def get_exclude_dirs_set() -> frozenset[str]:
 
 def should_exclude_path(file_path: str, exclude_dirs: frozenset[str]) -> bool:
     """
-    檢查路徑是否應被排除 (優化版本).
+    判斷路徑是否應被排除 (任一層目錄符合 exclude_dirs 模式).
 
     Args:
         file_path: 檔案路徑
-        exclude_dirs: 排除目錄集合
+        exclude_dirs: 排除目錄集合 (支援萬用字元如 *.egg-info)
 
     Returns:
-        是否應排除
+        True 如果應排除
     """
-    # 使用 parts 進行集合交集,比字串 in 檢查快很多
-    # 將路徑分割為各個部分
-    path_parts = set(file_path.replace("\\", "/").split("/"))
-    return bool(path_parts & exclude_dirs)
+    path_parts = Path(file_path).parts
+    for part in path_parts:
+        for pattern in exclude_dirs:
+            if fnmatch.fnmatch(part, pattern):
+                return True
+    return False
 
 
 def walk_python_files(
@@ -115,7 +119,7 @@ def walk_python_files(
 
     Args:
         directory: 要搜尋的目錄
-        exclude_dirs: 排除目錄集合 (basename match)
+        exclude_dirs: 排除目錄集合 (支援萬用字元如 *.egg-info)
         ignore_files: 排除檔名集合 (basename match)
 
     Returns:
@@ -123,8 +127,11 @@ def walk_python_files(
     """
     python_files: list[str] = []
     for dirpath, dirnames, filenames in os.walk(directory, followlinks=False):
-        # In-place prune: 只排除明確列出的目錄，保留使用者可掃描其他 dot-dir 的能力。
-        dirnames[:] = [d for d in dirnames if d not in exclude_dirs]
+        # In-place prune: 支援萬用字元
+        dirnames[:] = [
+            d for d in dirnames
+            if not any(fnmatch.fnmatch(d, pattern) for pattern in exclude_dirs)
+        ]
         python_files.extend(os.path.join(dirpath, f) for f in filenames if f.endswith(".py") and f not in ignore_files)
 
     python_files.sort()

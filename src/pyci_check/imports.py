@@ -158,14 +158,14 @@ def get_ruff_config_from_pyproject(project_dir: str) -> dict:
     """
     pyproject_path = find_pyproject_toml(project_dir)
     if not pyproject_path:
-        return {"src": [], "exclude_dirs": [], "exclude_files": []}
+        return {"src": [], "exclude_dirs": [], "exclude_files": [], "check_test_purity": False}
 
     try:
         with open(pyproject_path, "rb") as f:
             data = tomllib.load(f)
     except (OSError, tomllib.TOMLDecodeError):
         # 檔案讀取失敗或 TOML 格式錯誤,使用預設設定
-        return {"src": [], "exclude_dirs": [], "exclude_files": []}
+        return {"src": [], "exclude_dirs": [], "exclude_files": [], "check_test_purity": False}
 
     ruff = data.get("tool", {}).get("ruff", {})
     pyci_check = data.get("tool", {}).get("pyci-check", {})
@@ -210,7 +210,14 @@ def get_ruff_config_from_pyproject(project_dir: str) -> dict:
         else:
             exclude_dirs.append(item)
 
-    return {"src": src, "exclude_dirs": exclude_dirs, "exclude_files": exclude_files}
+    check_test_purity = pyci_check.get("check-test-purity", False)
+
+    return {
+        "src": src,
+        "exclude_dirs": exclude_dirs,
+        "exclude_files": exclude_files,
+        "check_test_purity": check_test_purity
+    }
 
 
 @lru_cache(maxsize=1)

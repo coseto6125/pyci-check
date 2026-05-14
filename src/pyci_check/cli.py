@@ -22,6 +22,10 @@ from pyci_check.imports import (
 )
 from pyci_check.syntax import check_files_parallel, find_python_files
 from pyci_check.utils import safe_relpath
+from pyci_check.dependency import find_dependency_issues
+from pyci_check.cycles import find_import_cycles
+from pyci_check.side_effects import detect_side_effects
+from pyci_check.deadcode import scan_dead_code
 
 
 def check_syntax(args: argparse.Namespace) -> int:
@@ -165,6 +169,139 @@ def check_imports(args: argparse.Namespace) -> int:
     return 0
 
 
+def check_dependency(args: argparse.Namespace) -> int:
+    """執行依賴健康度檢查."""
+    project_path = os.getcwd()
+    ruff_config = get_ruff_config_from_pyproject(project_path)
+    ignore_dirs = set(ruff_config["exclude_dirs"])
+    ignore_files = set(ruff_config["exclude_files"])
+    src_dirs = ruff_config["src"]
+
+    if not args.quiet:
+        print(t("dependency.checking"))
+
+    all_imports, _ = extract_from_all_files(
+        project_path,
+        ignore_dirs=ignore_dirs,
+        ignore_files=ignore_files,
+    )
+
+    imported_modules = {imp["module"].split(".")[0] for imp in all_imports}
+    
+    # 本地模組名
+    local_modules = set()
+    python_files = find_python_files(project_path, exclude_dirs=list(ignore_dirs))
+    roots = [project_path] + [os.path.join(project_path, s) for s in src_dirs]
+    for fp in python_files:
+        for root in roots:
+            if fp.startswith(os.path.abspath(root)):
+                rel = os.path.relpath(fp, root)
+                local_modules.add(rel.split(os.sep)[0].removesuffix(".py"))
+
+    issues = find_dependency_issues(project_path, imported_modules, local_modules)
+
+    has_issues = False
+    if issues["phantom"]:
+        has_issues = True
+        print(t("dependency.phantom"))
+        for p in sorted(issues["phantom"]):
+            print(f"  - {p}")
+
+    if issues["orphan"]:
+        # Orphan 視為警告，不一定導致 exit 1，但這裡我們先統一報出來
+        print(t("dependency.orphan"))
+        for p in sorted(issues["orphan"]):
+            print(f"  - {p}")
+
+    if not has_issues:
+        if not args.quiet:
+            print(t("dependency.success"))
+        return 0
+    return 1
+
+
+def check_cycles(args: argparse.Namespace) -> int:
+    """執行循環引用檢查."""
+    project_path = os.getcwd()
+    ruff_config = get_ruff_config_from_pyproject(project_path)
+    ignore_dirs = set(ruff_config["exclude_dirs"])
+    ignore_files = set(ruff_config["exclude_files"])
+    src_dirs = ruff_config["src"]
+
+    if not args.quiet:
+        print(t("cycles.checking"))
+
+    all_imports, all_relative_imports = extract_from_all_files(
+        project_path,
+        ignore_dirs=ignore_dirs,
+        ignore_files=ignore_files,
+    )
+
+    cycles = find_import_cycles(all_imports, all_relative_imports, project_path, src_dirs)
+
+    if cycles:
+        print(t("cycles.found", len(cycles)))
+        for i, cycle in enumerate(cycles, 1):
+            rel_cycle = [safe_relpath(fp, project_path) for fp in cycle]
+            print(f"  {i}. {' -> '.join(rel_cycle)}")
+        return 1
+
+    if not args.quiet:
+        print(t("cycles.success"))
+    return 0
+
+
+def check_side_effects(args: argparse.Namespace) -> int:
+    """執行全局副作用檢查 (僅警告)."""
+    project_path = os.getcwd()
+    ruff_config = get_ruff_config_from_pyproject(project_path)
+    ignore_dirs = set(ruff_config["exclude_dirs"])
+    check_test_purity = ruff_config.get("check_test_purity", False)
+    python_files = find_python_files(project_path, exclude_dirs=list(ignore_dirs))
+
+    if not args.quiet:
+        print(t("side_effects.checking"))
+
+    warnings = detect_side_effects(python_files, check_test_purity)
+
+    if warnings:
+        print(t("side_effects.found", len(warnings)))
+        for w in warnings:
+            rel_file = safe_relpath(w["file"], project_path)
+            print(f"  - {rel_file}:{w['line']} -> {w['call']} ({w['reason']})")
+        # 僅警告，不回傳錯誤碼
+        return 0
+
+    if not args.quiet:
+        print(t("side_effects.success"))
+    return 0
+
+
+def check_deadcode(args: argparse.Namespace) -> int:
+    """執行死代碼掃描 (僅警告)."""
+    project_path = os.getcwd()
+    ruff_config = get_ruff_config_from_pyproject(project_path)
+    ignore_dirs = set(ruff_config["exclude_dirs"])
+    python_files = find_python_files(project_path, exclude_dirs=list(ignore_dirs))
+
+    if not args.quiet:
+        print(t("deadcode.checking"))
+
+    warnings = scan_dead_code(python_files)
+
+    if warnings:
+        print(t("deadcode.found", len(warnings)))
+        for w in warnings:
+            rel_file = safe_relpath(w["file"], project_path)
+            print(f"  - {w['name']} (in {rel_file}:{w['line']})")
+        # 僅警告，不回傳錯誤碼
+        return 0
+
+    if not args.quiet:
+        print(t("deadcode.success"))
+    return 0
+
+
 def check_all(args: argparse.Namespace) -> int:
     """執行所有檢查."""
     exit_code = 0
@@ -174,21 +311,45 @@ def check_all(args: argparse.Namespace) -> int:
         print(t("check_all.start"))
         print("=" * 60)
 
-    # 語法檢查
+    # 1. 語法檢查
     if not args.quiet:
         print(f"\n{t('check_all.syntax_phase')}")
-    syntax_result = check_syntax(args)
-    if syntax_result != 0:
+    if check_syntax(args) != 0:
         exit_code = 1
         if args.fail_fast:
             return exit_code
 
-    # Import 檢查
+    # 2. Import 檢查
     if not args.quiet:
         print(f"\n{t('check_all.imports_phase')}")
-    import_result = check_imports(args)
-    if import_result != 0:
+    if check_imports(args) != 0:
         exit_code = 1
+        if args.fail_fast:
+            return exit_code
+
+    # 3. 依賴健康度檢查
+    if not args.quiet:
+        print(f"\n{t('check_all.dependency_phase')}")
+    if check_dependency(args) != 0:
+        exit_code = 1
+        if args.fail_fast:
+            return exit_code
+
+    # 4. 循環引用檢查
+    if not args.quiet:
+        print(f"\n{t('check_all.cycles_phase')}")
+    if check_cycles(args) != 0:
+        exit_code = 1
+
+    # 5. 全局副作用檢查 (Warning only)
+    if not args.quiet:
+        print(f"\n{t('check_all.side_effects_phase')}")
+    check_side_effects(args)
+
+    # 6. 死代碼掃描 (Warning only)
+    if not args.quiet:
+        print(f"\n{t('check_all.deadcode_phase')}")
+    check_deadcode(args)
 
     if not args.quiet:
         print("\n" + "=" * 60)
@@ -236,6 +397,22 @@ def main() -> None:
     imports_parser = subparsers.add_parser("imports", help=t("cli.help.imports"))
     add_common_args(imports_parser)
 
+    # dependency 子指令
+    dependency_parser = subparsers.add_parser("dependency", help=t("cli.help.dependency"))
+    add_common_args(dependency_parser)
+
+    # cycles 子指令
+    cycles_parser = subparsers.add_parser("cycles", help=t("cli.help.cycles"))
+    add_common_args(cycles_parser)
+
+    # side-effects 子指令
+    side_effects_parser = subparsers.add_parser("side-effects", help="檢查全局副作用 (警告層級)")
+    add_common_args(side_effects_parser)
+
+    # deadcode 子指令
+    deadcode_parser = subparsers.add_parser("deadcode", help="掃描死代碼 (警告層級)")
+    add_common_args(deadcode_parser)
+
     # install-hooks 子指令
     install_parser = subparsers.add_parser("install-hooks", help=t("cli.help.install_hooks"))
     install_parser.add_argument("--type", choices=["pre-commit", "pre-push", "both"], default="pre-commit", help=t("cli.help.hook_type"))
@@ -252,6 +429,14 @@ def main() -> None:
         exit_code = check_syntax(args)
     elif args.command == "imports":
         exit_code = check_imports(args)
+    elif args.command == "dependency":
+        exit_code = check_dependency(args)
+    elif args.command == "cycles":
+        exit_code = check_cycles(args)
+    elif args.command == "side-effects":
+        exit_code = check_side_effects(args)
+    elif args.command == "deadcode":
+        exit_code = check_deadcode(args)
     elif args.command == "install-hooks":
         exit_code = install_hooks(args.type)
     elif args.command == "uninstall-hooks":
