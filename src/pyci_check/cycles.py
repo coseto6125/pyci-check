@@ -7,12 +7,7 @@
 import os
 
 
-def find_import_cycles(
-    all_imports: list[dict],
-    all_relative_imports: list[dict],
-    project_dir: str,
-    src_dirs: list[str]
-) -> list[list[str]]:
+def find_import_cycles(all_imports: list[dict], all_relative_imports: list[dict], project_dir: str, src_dirs: list[str]) -> list[list[str]]:
     """
     找出專案中的循環引用.
 
@@ -31,6 +26,7 @@ def find_import_cycles(
 
     # 收集所有本地模組
     from pyci_check.utils import get_exclude_dirs_set, walk_python_files
+
     python_files = walk_python_files(project_dir, get_exclude_dirs_set())
 
     # 建立映射
@@ -38,7 +34,6 @@ def find_import_cycles(
     roots.extend(os.path.join(project_dir, s) for s in src_dirs)
 
     for fp in python_files:
-
         abs_fp = os.path.abspath(fp)
         # 尋找最短模組名 (最深層的 root)
         best_mod = None
@@ -114,7 +109,7 @@ def find_import_cycles(
         stack_set.add(node)
 
         for neighbor in graph.get(node, []):
-            if neighbor == node: # 排除自我引用 (雖然在 Python 很少見)
+            if neighbor == node:  # 排除自我引用 (雖然在 Python 很少見)
                 continue
             if neighbor in stack_set:
                 # 發現環

@@ -21,6 +21,7 @@ class SideEffectVisitor(ast.NodeVisitor):
         self.scope_depth = 0
 
         import os
+
         filename = os.path.basename(filepath)
         # 判斷是否為測試檔案
         self.is_test_file = filename.startswith("test_") or "tests" in filepath.split(os.sep)
@@ -70,7 +71,6 @@ class SideEffectVisitor(ast.NodeVisitor):
             "threading.Thread": "Thread/Process creation",
             "Process": "Thread/Process creation",
             "multiprocessing.Process": "Thread/Process creation",
-
             # 常見網路請求
             "requests.get": "Network request",
             "requests.post": "Network request",
@@ -87,12 +87,7 @@ class SideEffectVisitor(ast.NodeVisitor):
 
             reason = f"Top-level {reason_base.lower()}" if self.scope_depth == 0 else f"Impure test: {reason_base.lower()} detected"
 
-            self.warnings.append({
-                "file": self.filepath,
-                "line": lineno,
-                "call": call_name,
-                "reason": reason
-            })
+            self.warnings.append({"file": self.filepath, "line": lineno, "call": call_name, "reason": reason})
 
 
 def detect_side_effects(python_files: list[str], check_test_purity: bool = False) -> list[dict]:

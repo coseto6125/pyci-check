@@ -112,8 +112,12 @@ def scan_dead_code(python_files: list[str]) -> list[dict]:
 
     # 常見的框架鉤子/白名單 (不應被報警)
     whitelist = {
-        "main", "setup", "run", "cli",  # 入口
-        "pytest_configure", "pytest_addoption",  # pytest 鉤子
+        "main",
+        "setup",
+        "run",
+        "cli",  # 入口
+        "pytest_configure",
+        "pytest_addoption",  # pytest 鉤子
     }
 
     for name, locations in all_definitions.items():
@@ -128,12 +132,9 @@ def scan_dead_code(python_files: list[str]) -> list[dict]:
             continue
 
         if name not in usage_visitor.used_names:
-            warnings.extend({
-                "file": loc["file"],
-                "line": loc["line"],
-                "name": name,
-                "reason": "Definition appears to be unused across the project"
-            } for loc in locations)
+            warnings.extend(
+                {"file": loc["file"], "line": loc["line"], "name": name, "reason": "Definition appears to be unused across the project"}
+                for loc in locations
+            )
 
     return warnings
-

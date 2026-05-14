@@ -212,12 +212,7 @@ def get_ruff_config_from_pyproject(project_dir: str) -> dict:
 
     check_test_purity = pyci_check.get("check-test-purity", False)
 
-    return {
-        "src": src,
-        "exclude_dirs": exclude_dirs,
-        "exclude_files": exclude_files,
-        "check_test_purity": check_test_purity
-    }
+    return {"src": src, "exclude_dirs": exclude_dirs, "exclude_files": exclude_files, "check_test_purity": check_test_purity}
 
 
 @lru_cache(maxsize=1)

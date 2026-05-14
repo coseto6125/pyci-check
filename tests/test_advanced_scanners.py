@@ -6,18 +6,24 @@ from pyci_check.side_effects import detect_side_effects
 
 def test_side_effects(tmp_path):
     safe_file = tmp_path / "safe.py"
-    safe_file.write_text("""
+    safe_file.write_text(
+        """
 import requests
 def fetch():
     requests.get('http://example.com')
-""", encoding="utf-8")
+""",
+        encoding="utf-8",
+    )
 
     danger_file = tmp_path / "danger.py"
-    danger_file.write_text("""
+    danger_file.write_text(
+        """
 import requests
 # 頂層副作用
 response = requests.get('http://example.com')
-""", encoding="utf-8")
+""",
+        encoding="utf-8",
+    )
 
     warnings = detect_side_effects([str(safe_file), str(danger_file)])
 
@@ -28,21 +34,27 @@ response = requests.get('http://example.com')
 
 def test_deadcode_scan(tmp_path):
     a_py = tmp_path / "a.py"
-    a_py.write_text("""
+    a_py.write_text(
+        """
 def used_func():
     pass
 
 def unused_func():
     pass
-""", encoding="utf-8")
+""",
+        encoding="utf-8",
+    )
 
     b_py = tmp_path / "b.py"
-    b_py.write_text("""
+    b_py.write_text(
+        """
 from a import used_func
 
 def main():
     used_func()
-""", encoding="utf-8")
+""",
+        encoding="utf-8",
+    )
 
     # 執行死代碼掃描
     warnings = scan_dead_code([str(a_py), str(b_py)])

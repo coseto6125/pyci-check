@@ -6,7 +6,8 @@ from pyci_check.dependency import find_dependency_issues, get_declared_dependenc
 def test_parse_pyproject_dependencies(tmp_path):
     """測試解析標準 PEP 621 格式的 pyproject.toml"""
     pyproject = tmp_path / "pyproject.toml"
-    pyproject.write_text("""
+    pyproject.write_text(
+        """
 [project]
 dependencies = [
     "requests>=2.0.0",
@@ -15,26 +16,33 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest"]
-""", encoding="utf-8")
+""",
+        encoding="utf-8",
+    )
 
     deps = parse_pyproject_dependencies(str(pyproject))
     assert deps == {"requests", "numpy", "pytest"}
 
+
 def test_parse_pyproject_poetry(tmp_path):
     """測試解析 Poetry 格式的 pyproject.toml"""
     pyproject = tmp_path / "pyproject.toml"
-    pyproject.write_text("""
+    pyproject.write_text(
+        """
 [tool.poetry.dependencies]
 python = "^3.11"
 fastapi = "^0.100.0"
 
 [tool.poetry.group.dev.dependencies]
 pytest-cov = "^4.0.0"
-""", encoding="utf-8")
+""",
+        encoding="utf-8",
+    )
 
     deps = parse_pyproject_dependencies(str(pyproject))
     # python 應該被排除
     assert deps == {"fastapi", "pytest-cov"}
+
 
 def test_parse_empty_or_missing_pyproject(tmp_path):
     """測試缺少檔案或空檔案的容錯"""
@@ -44,21 +52,26 @@ def test_parse_empty_or_missing_pyproject(tmp_path):
     empty_toml.write_text("", encoding="utf-8")
     assert parse_pyproject_dependencies(str(empty_toml)) == set()
 
+
 def test_parse_requirements_txt(tmp_path):
     """測試解析 requirements.txt"""
     reqs = tmp_path / "requirements.txt"
-    reqs.write_text("""
+    reqs.write_text(
+        """
 requests==2.25.1
 # 註解行
 -r other.txt
 --index-url https://...
 numpy>=1.19 ; python_version < '3.8'
 my-custom_pkg
-""", encoding="utf-8")
+""",
+        encoding="utf-8",
+    )
 
     deps = parse_requirements_txt(str(reqs))
     # 應忽略註解、特殊指令，並處理分號與符號
     assert deps == {"requests", "numpy", "my-custom-pkg"}
+
 
 def test_find_dependency_issues_phantom():
     """測試幽靈依賴偵測"""
@@ -68,6 +81,7 @@ def test_find_dependency_issues_phantom():
     local_modules = {"my_local"}
 
     import pyci_check.dependency as dep_mod
+
     original_get_deps = dep_mod.get_declared_dependencies
 
     # Mock 只宣告了 requests
@@ -85,6 +99,7 @@ def test_find_dependency_issues_phantom():
     finally:
         dep_mod.get_declared_dependencies = original_get_deps
 
+
 def test_find_dependency_issues_orphan():
     """測試冗餘依賴偵測"""
     project_dir = "."
@@ -93,6 +108,7 @@ def test_find_dependency_issues_orphan():
     local_modules = set()
 
     import pyci_check.dependency as dep_mod
+
     original_get_deps = dep_mod.get_declared_dependencies
 
     # 但設定檔宣告了 requests, pandas (沒用到), 和 pytest (工具套件，應被忽略)
@@ -110,6 +126,7 @@ def test_find_dependency_issues_orphan():
 
     finally:
         dep_mod.get_declared_dependencies = original_get_deps
+
 
 def test_get_declared_dependencies_integration(tmp_path):
     """測試整合尋找專案內所有依賴檔案"""

@@ -98,11 +98,7 @@ def get_declared_dependencies(project_dir: str) -> set[str]:
     return all_deps
 
 
-def find_dependency_issues(
-    project_dir: str,
-    imported_modules: set[str],
-    local_modules: set[str]
-) -> dict[str, set[str]]:
+def find_dependency_issues(project_dir: str, imported_modules: set[str], local_modules: set[str]) -> dict[str, set[str]]:
     """
     分析依賴問題.
 
@@ -119,6 +115,7 @@ def find_dependency_issues(
 
     # 獲取模組到包的映射 (需在當前環境執行)
     import importlib.metadata
+
     try:
         module_to_pkg = importlib.metadata.packages_distributions()
     except Exception:

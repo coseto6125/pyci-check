@@ -14,10 +14,12 @@ def test_normalize_locale():
     assert _normalize_locale("en-US") == "en"
     assert _normalize_locale("fr") == "en"  # 不支援的語言退回預設 en
 
+
 def test_t_function_fallback():
     """測試未定義的 key 應該直接回傳 key 本身."""
     assert t("non_existent.key") == "non_existent.key"
     assert t("non_existent.key", "arg1") == "non_existent.key"
+
 
 @patch("pyci_check.i18n.get_locale", return_value="en")
 def test_t_function_en(*_args):
@@ -25,17 +27,20 @@ def test_t_function_en(*_args):
     assert t("syntax.checking", 5) == "Checking syntax of 5 files..."
     assert t("imports.checking") == "Checking import dependencies..."
 
+
 @patch("pyci_check.i18n.get_locale", return_value="zh_TW")
 def test_t_function_zh_tw(*_args):
     """測試繁體中文翻譯與格式化."""
     assert t("syntax.checking", 5) == "檢查 5 個檔案的語法..."
     assert t("imports.checking") == "檢查 import 依賴..."
 
+
 @patch("pyci_check.i18n.get_locale", return_value="zh_CN")
 def test_t_function_zh_cn(*_args):
     """測試簡體中文翻譯與格式化."""
     assert t("syntax.checking", 5) == "检查 5 个文件的语法..."
     assert t("imports.checking") == "检查 import 依赖..."
+
 
 def test_t_function_new_features():
     """測試新功能 (dependency / cycles) 的翻譯是否都有定義."""
@@ -47,7 +52,7 @@ def test_t_function_new_features():
         "dependency.success",
         "cycles.checking",
         "cycles.found",
-        "cycles.success"
+        "cycles.success",
     ]
 
     for locale in ["en", "zh_TW", "zh_CN"]:

@@ -128,10 +128,7 @@ def walk_python_files(
     python_files: list[str] = []
     for dirpath, dirnames, filenames in os.walk(directory, followlinks=False):
         # In-place prune: 支援萬用字元
-        dirnames[:] = [
-            d for d in dirnames
-            if not any(fnmatch.fnmatch(d, pattern) for pattern in exclude_dirs)
-        ]
+        dirnames[:] = [d for d in dirnames if not any(fnmatch.fnmatch(d, pattern) for pattern in exclude_dirs)]
         python_files.extend(os.path.join(dirpath, f) for f in filenames if f.endswith(".py") and f not in ignore_files)
 
     python_files.sort()

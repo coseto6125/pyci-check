@@ -30,6 +30,7 @@ def test_find_import_cycles_absolute(tmp_path):
             break
     assert found_ab
 
+
 def test_find_import_cycles_relative(tmp_path):
     """測試相對匯入造成的循環引用"""
     # 目錄結構:
@@ -64,6 +65,7 @@ def test_find_import_cycles_relative(tmp_path):
             break
     assert found_xy
 
+
 def test_no_cycles(tmp_path):
     """測試沒有循環引用的情況"""
     a_py = tmp_path / "a.py"
@@ -79,10 +81,12 @@ def test_no_cycles(tmp_path):
     cycles = find_import_cycles(all_imports, [], str(tmp_path), [])
     assert len(cycles) == 0
 
+
 def test_empty_project(tmp_path):
     """測試空專案"""
     cycles = find_import_cycles([], [], str(tmp_path), [])
     assert len(cycles) == 0
+
 
 def test_self_reference_ignored(tmp_path):
     """測試自我引用不應被視為循環 (Python 少見，但要防呆)"""

@@ -73,7 +73,6 @@ TRANSLATIONS = {
     "check_all.side_effects_phase": "[5/6] 全局副作用检查 (仅警告)",
     "check_all.deadcode_phase": "[6/6] 深层死代码扫描 (仅警告)",
     "check_all.success": "✓ 所有检查通过",
-
     "check_all.errors": "✗ 发现错误",
     # Git hooks
     "hooks.find_git_error": "错误: 找不到 .git 目录",
