@@ -4,19 +4,22 @@
 
 ---
 
-Fast Python syntax and import checker designed for CI/CD and Git hooks.
+Fast Python syntax, import, and architecture checker designed for CI/CD and Git hooks.
 
 ## Features
 
 - ⚡ **High-performance parallel processing** - Uses ThreadPoolExecutor for concurrent checking
-- 🔍 **Dual-layer checking**:
-  - **Syntax checking** - AST static analysis, fast and completely safe
-  - **Import checking** - Static analysis or dynamic execution to detect runtime errors
-- 🎯 **Flexible scope** - Check entire project, specific directories, or specific files
+- 🛡️ **Architecture Defender**:
+  - **Dependency Health** - Detects phantom (used but undeclared) and orphan (declared but unused) dependencies
+  - **Import Cycles** - Graph-based detection of absolute and relative import cycles
+  - **Side-Effects Scan** - Warns on dangerous top-level threading/network IO
+  - **Deep Dead Code** - Project-wide scan for unused functions and classes
+  - **Test Purity** (Opt-in) - Blocks network requests in unit tests to prevent flaky tests
+- 🔍 **Dual-layer Import checking**:
+  - **Static analysis** - Fast and completely safe
+  - **Dynamic execution** - Detects runtime errors (requires explicit flag)
 - 🔧 **Auto-integrates ruff config** - Reads exclude and src settings from `pyproject.toml`
-- 🪝 **Git hooks support** - Append mode, won't overwrite existing hooks
-- 📦 **Zero external dependencies** - Uses only Python standard library
-- ⚠️ **Explicit consent** - Dynamic import checking requires explicit flag
+- 🪝 **Strict Pre-commit Hook** - Runs local CI (ruff format -> ruff check -> pyci-check) before committing
 - 🌐 **Multi-language** - Supports English, Traditional Chinese, Simplified Chinese
 
 ## Installation
@@ -40,54 +43,39 @@ uv pip install pyci-check
 ### Basic Usage
 
 ```bash
-# Check entire project (syntax + static import analysis)
+# Execute full CI pipeline (Syntax -> Imports -> Dependency Health -> Cycles -> Side-effects -> Deadcode)
 pyci-check check
 
 # Check syntax only
 pyci-check syntax
 
+# Check import cycles
+pyci-check cycles
+
+# Check dependency health (Phantom & Orphan)
+pyci-check dependency
+
 # Check imports (static, safe)
 pyci-check imports
-
-# Check imports (dynamic, executes code)
-pyci-check imports --i-understand-this-will-execute-code
-```
-
-### Check Specific Files or Directories
-
-```bash
-# Check specific files
-pyci-check check src/main.py tests/test_main.py
-
-# Check specific directories
-pyci-check check src/ tests/
-
-# Mix files and directories
-pyci-check check src/ scripts/deploy.py
 ```
 
 ### Git Hooks Integration
 
 ```bash
-# Install pre-commit hook (default)
+# Install strict pre-commit hook (runs ruff + pyci-check locally)
 pyci-check install-hooks
-
-# Install pre-push hook
-pyci-check install-hooks --type pre-push
-
-# Remove pyci-check hooks (preserves other hooks)
-pyci-check uninstall-hooks
 ```
-
-**Note**: `install-hooks` uses append mode and won't overwrite your existing hooks (like black, mypy, etc.).
 
 ## Main Commands
 
-- `check [paths...]` - Execute all checks (syntax + import static analysis)
-- `syntax [paths...]` - Check Python syntax only
-- `imports [paths...]` - Check import dependencies only
-- `install-hooks` - Install Git hooks (append mode)
-- `uninstall-hooks` - Remove pyci-check's Git hooks
+- `check [paths...]` - Execute all 6 validation phases
+- `syntax [paths...]` - Check Python syntax
+- `imports [paths...]` - Check import resolvability
+- `dependency` - Check for phantom and orphan dependencies
+- `cycles` - Detect import cycles
+- `side-effects` - Warn on dangerous top-level operations
+- `deadcode` - Warn on unused functions/classes
+- `install-hooks` - Install local CI Git hooks
 
 ## Common Options
 
@@ -142,6 +130,9 @@ Configure in `pyproject.toml`:
 [tool.pyci-check]
 # Language setting (default: en)
 language = "en"  # or "zh_TW", "zh_CN"
+
+# Enable strict test purity check (Blocks network/threading in tests)
+check-test-purity = true
 
 # Virtual environment path (optional)
 # venv = "."  # Use .venv in current directory (recommended for uv)
