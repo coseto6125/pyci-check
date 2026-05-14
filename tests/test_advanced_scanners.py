@@ -1,8 +1,8 @@
 """測試死代碼掃描與副作用偵測."""
 
-import os
-from pyci_check.side_effects import detect_side_effects
 from pyci_check.deadcode import scan_dead_code
+from pyci_check.side_effects import detect_side_effects
+
 
 def test_side_effects(tmp_path):
     safe_file = tmp_path / "safe.py"
@@ -20,7 +20,7 @@ response = requests.get('http://example.com')
 """, encoding="utf-8")
 
     warnings = detect_side_effects([str(safe_file), str(danger_file)])
-    
+
     assert len(warnings) == 1
     assert "danger.py" in warnings[0]["file"]
     assert "requests.get" in warnings[0]["call"]
@@ -46,7 +46,7 @@ def main():
 
     # 執行死代碼掃描
     warnings = scan_dead_code([str(a_py), str(b_py)])
-    
+
     # 預期 main 會在 whitelist 中被忽略
     # used_func 被使用了
     # 只有 unused_func 應該被報告

@@ -9,55 +9,53 @@
 import os
 import re
 import tomllib
-from pathlib import Path
-from typing import Set, Dict, List, Optional
 
 from pyci_check.imports import _stdlib_top_levels
 
 
-def parse_pyproject_dependencies(pyproject_path: str) -> Set[str]:
+def parse_pyproject_dependencies(pyproject_path: str) -> set[str]:
     """從 pyproject.toml 提取依賴包名稱."""
     deps = set()
     try:
         with open(pyproject_path, "rb") as f:
             data = tomllib.load(f)
-        
+
         # 標準 [project.dependencies]
         project = data.get("project", {})
         deps.update(_extract_names(project.get("dependencies", [])))
-        
+
         # [project.optional-dependencies]
         optional = project.get("optional-dependencies", {})
         for group in optional.values():
             deps.update(_extract_names(group))
-            
+
         # Poetry [tool.poetry.dependencies]
         poetry = data.get("tool", {}).get("poetry", {})
         poetry_deps = poetry.get("dependencies", {})
         if isinstance(poetry_deps, dict):
             # Poetry 字典格式: {"requests": "^2.0.0"}
             deps.update(poetry_deps.keys())
-        
+
         poetry_dev_deps = poetry.get("group", {}).get("dev", {}).get("dependencies", {})
         if isinstance(poetry_dev_deps, dict):
             deps.update(poetry_dev_deps.keys())
 
     except (OSError, tomllib.TOMLDecodeError):
         pass
-    
+
     # 排除 python 自身
     deps.discard("python")
     return {d.lower().replace("_", "-") for d in deps}
 
 
-def parse_requirements_txt(req_path: str) -> Set[str]:
+def parse_requirements_txt(req_path: str) -> set[str]:
     """從 requirements.txt 提取依賴包名稱."""
     deps = set()
     if not os.path.exists(req_path):
         return deps
-        
+
     try:
-        with open(req_path, "r", encoding="utf-8") as f:
+        with open(req_path, encoding="utf-8") as f:
             for line in f:
                 line = line.strip()
                 if not line or line.startswith(("#", "-r", "-c", "--")):
@@ -72,7 +70,7 @@ def parse_requirements_txt(req_path: str) -> Set[str]:
     return {d.lower().replace("_", "-") for d in deps}
 
 
-def _extract_names(spec_list: List[str]) -> List[str]:
+def _extract_names(spec_list: list[str]) -> list[str]:
     """從 PEP 508 規格列表中提取包名."""
     names = []
     for spec in spec_list:
@@ -82,43 +80,43 @@ def _extract_names(spec_list: List[str]) -> List[str]:
     return names
 
 
-def get_declared_dependencies(project_dir: str) -> Set[str]:
+def get_declared_dependencies(project_dir: str) -> set[str]:
     """獲取專案宣告的所有依賴 (包名)."""
     all_deps = set()
-    
+
     # 1. pyproject.toml
     pyproject = os.path.join(project_dir, "pyproject.toml")
     if os.path.exists(pyproject):
         all_deps.update(parse_pyproject_dependencies(pyproject))
-        
+
     # 2. requirements.txt (及常見變體)
     for req_file in ["requirements.txt", "requirements-dev.txt", "dev-requirements.txt"]:
         path = os.path.join(project_dir, req_file)
         if os.path.exists(path):
             all_deps.update(parse_requirements_txt(path))
-            
+
     return all_deps
 
 
 def find_dependency_issues(
     project_dir: str,
-    imported_modules: Set[str],
-    local_modules: Set[str]
-) -> Dict[str, Set[str]]:
+    imported_modules: set[str],
+    local_modules: set[str]
+) -> dict[str, set[str]]:
     """
     分析依賴問題.
-    
+
     Args:
         project_dir: 專案根目錄
         imported_modules: 程式碼中使用的所有頂層模組名
         local_modules: 專案自身的模組名 (應排除在第三方檢查外)
-        
+
     Returns:
         {"phantom": set(), "orphan": set()}
     """
     declared_packages = get_declared_dependencies(project_dir)
     stdlib = _stdlib_top_levels()
-    
+
     # 獲取模組到包的映射 (需在當前環境執行)
     import importlib.metadata
     try:
@@ -131,13 +129,13 @@ def find_dependency_issues(
     for mod in imported_modules:
         if mod in stdlib or mod in local_modules or mod == "setup":
             continue
-            
+
         # 找出該模組屬於哪些包
         pkgs = module_to_pkg.get(mod, [mod])
         # 只要其中一個包有宣告，就算過關
         if not any(p.lower().replace("_", "-") in declared_packages for p in pkgs):
             phantom.add(mod)
-            
+
     # 2. 冗餘依賴 (Orphan): 宣告了，但沒用到
     # 需要 反向映射: package -> modules
     pkg_to_modules = {}
@@ -147,7 +145,7 @@ def find_dependency_issues(
             if p_norm not in pkg_to_modules:
                 pkg_to_modules[p_norm] = set()
             pkg_to_modules[p_norm].add(mod)
-            
+
     orphan = set()
     for pkg in declared_packages:
         # 如果這個包對應的模組都沒有出現在 imported_modules 中
@@ -157,5 +155,5 @@ def find_dependency_issues(
             if pkg in {"pytest", "pytest-cov", "ruff", "black", "mypy", "tox", "flake8", "isort"}:
                 continue
             orphan.add(pkg)
-            
+
     return {"phantom": phantom, "orphan": orphan}

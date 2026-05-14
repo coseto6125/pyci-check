@@ -1,9 +1,10 @@
 """測試：測試純潔度與隔離性 (Test Purity)."""
 
-import pytest
 import os
 import subprocess
+import sys
 from pathlib import Path
+
 
 def test_purity_check_disabled_by_default(tmp_path: Path):
     """預設不開啟純潔度檢查，測試檔案中使用 socket 應該沒事."""
@@ -14,17 +15,17 @@ def test_socket():
     s = socket.socket()
     s.close()
 """, encoding="utf-8")
-    
+
     # 執行 side-effects 檢查
     env = os.environ.copy()
     result = subprocess.run(
-        ["python3", "-m", "pyci_check.cli", "side-effects"],
-        cwd=str(tmp_path),
+        [sys.executable, "-m", "pyci_check.cli", "side-effects"],
+        check=False, cwd=str(tmp_path),
         env=env,
         capture_output=True,
         text=True
     )
-    
+
     # 預期成功且沒有警告
     assert result.returncode == 0
     assert "socket.socket" not in result.stdout
@@ -43,16 +44,16 @@ import socket
 def test_func():
     s = socket.socket()
 """, encoding="utf-8")
-    
+
     env = os.environ.copy()
     result = subprocess.run(
-        ["python3", "-m", "pyci_check.cli", "side-effects"],
-        cwd=str(tmp_path),
+        [sys.executable, "-m", "pyci_check.cli", "side-effects"],
+        check=False, cwd=str(tmp_path),
         env=env,
         capture_output=True,
         text=True
     )
-    
+
     # 預期回傳 0 (因為只是 warning)
     assert result.returncode == 0
     # 但應該要在 stdout 中看到警告
@@ -75,16 +76,16 @@ def connect():
     s = socket.socket()
     s.close()
 """, encoding="utf-8")
-    
+
     env = os.environ.copy()
     result = subprocess.run(
-        ["python3", "-m", "pyci_check.cli", "side-effects"],
-        cwd=str(tmp_path),
+        [sys.executable, "-m", "pyci_check.cli", "side-effects"],
+        check=False, cwd=str(tmp_path),
         env=env,
         capture_output=True,
         text=True
     )
-    
+
     # 預期成功且沒有警告
     assert result.returncode == 0
     assert "socket.socket" not in result.stdout

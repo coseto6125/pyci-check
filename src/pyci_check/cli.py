@@ -12,6 +12,9 @@ if sys.platform == "win32":
     if sys.stderr.encoding != "utf-8":
         sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
 
+from pyci_check.cycles import find_import_cycles
+from pyci_check.deadcode import scan_dead_code
+from pyci_check.dependency import find_dependency_issues
 from pyci_check.git_hook import install_hooks, uninstall_hooks
 from pyci_check.i18n import t
 from pyci_check.imports import (
@@ -20,12 +23,9 @@ from pyci_check.imports import (
     get_ruff_config_from_pyproject,
     get_venv_from_pyproject,
 )
+from pyci_check.side_effects import detect_side_effects
 from pyci_check.syntax import check_files_parallel, find_python_files
 from pyci_check.utils import safe_relpath
-from pyci_check.dependency import find_dependency_issues
-from pyci_check.cycles import find_import_cycles
-from pyci_check.side_effects import detect_side_effects
-from pyci_check.deadcode import scan_dead_code
 
 
 def check_syntax(args: argparse.Namespace) -> int:
@@ -187,7 +187,7 @@ def check_dependency(args: argparse.Namespace) -> int:
     )
 
     imported_modules = {imp["module"].split(".")[0] for imp in all_imports}
-    
+
     # 本地模組名
     local_modules = set()
     python_files = find_python_files(project_path, exclude_dirs=list(ignore_dirs))
