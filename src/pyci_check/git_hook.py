@@ -76,16 +76,39 @@ PRE_COMMIT_HOOK_CONTENT = """# Check for staged Python files
 STAGED_PY_FILES=$(git diff --cached --name-only --diff-filter=ACM | grep -E '\\.py$' || true)
 
 if [ -n "$STAGED_PY_FILES" ]; then
-    echo "Running pyci-check..."
+    echo "Running local CI checks..."
 
-    # Run checks
-    if command -v pyci-check &> /dev/null; then
-        pyci-check check $STAGED_PY_FILES --quiet --fail-fast
+    # 1. Ruff Format Check
+    if command -v ruff &> /dev/null; then
+        echo "Running Ruff formatter..."
+        if ! ruff format --check $STAGED_PY_FILES; then
+            echo "❌ Formatting errors found. Please run 'ruff format .' to fix them."
+            exit 1
+        fi
+
+        echo "Running Ruff linter..."
+        if ! ruff check $STAGED_PY_FILES; then
+            echo "❌ Linting errors found. Please fix them before committing."
+            exit 1
+        fi
     else
-        echo "Error: pyci-check not installed"
+        echo "⚠️  Ruff not found, skipping lint/format checks."
+    fi
+
+    # 2. pyci-check
+    echo "Running pyci-check..."
+    if command -v pyci-check &> /dev/null; then
+        if ! pyci-check check $STAGED_PY_FILES --quiet --fail-fast; then
+            echo "❌ Architecture or dependency checks failed."
+            exit 1
+        fi
+    else
+        echo "❌ Error: pyci-check not installed"
         echo "Please run: pip install pyci-check"
         exit 1
     fi
+
+    echo "✅ All local CI checks passed!"
 fi
 """
 
@@ -163,7 +186,7 @@ def add_or_update_hook_content(hook_path: str, hook_content: str) -> bool:
 
         # 設定執行權限
         current_permissions = os.stat(hook_path).st_mode
-        os.chmod(hook_path, current_permissions | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+        os.chmod(hook_path, current_permissions | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)  # noqa: S103
 
         return True
     except OSError as e:

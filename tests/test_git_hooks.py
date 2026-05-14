@@ -34,9 +34,18 @@ class TestGitHooks:
         assert git_dir is not None
         assert Path(git_dir).name == ".git"
 
-    def test_find_git_directory_not_exists(self, temp_dir):
+    def test_find_git_directory_not_exists(self, temp_dir, monkeypatch):
         """測試找不到 .git 目錄."""
         os.chdir(temp_dir)
+        # 強制讓任何 .git 的檢查都回傳 False
+        original_exists = os.path.exists
+
+        def mock_exists(path):
+            if path.endswith(".git"):
+                return False
+            return original_exists(path)
+
+        monkeypatch.setattr(os.path, "exists", mock_exists)
         git_dir = find_git_directory()
 
         assert git_dir is None
