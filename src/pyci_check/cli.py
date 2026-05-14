@@ -15,6 +15,7 @@ if sys.platform == "win32":
 from pyci_check.cycles import find_import_cycles
 from pyci_check.deadcode import scan_dead_code
 from pyci_check.dependency import find_dependency_issues
+from pyci_check.signature import check_signatures
 from pyci_check.git_hook import install_hooks, uninstall_hooks
 from pyci_check.i18n import t
 from pyci_check.imports import (
@@ -251,6 +252,31 @@ def check_cycles(args: argparse.Namespace) -> int:
     return 0
 
 
+def check_signature(args: argparse.Namespace) -> int:
+    """執行跨檔案本地簽章驗證."""
+    project_path = os.getcwd()
+    ruff_config = get_ruff_config_from_pyproject(project_path)
+    ignore_dirs = set(ruff_config["exclude_dirs"])
+    src_dirs = ruff_config["src"]
+    python_files = find_python_files(project_path, exclude_dirs=list(ignore_dirs))
+
+    if not args.quiet:
+        print(t("signature.checking"))
+
+    errors = check_signatures(python_files, project_path, src_dirs)
+
+    if errors:
+        print(t("signature.found", len(errors)))
+        for err in errors:
+            rel_file = safe_relpath(err["file"], project_path)
+            print(f"  - {rel_file}:{err['line']} -> {err['func']} ({err['reason']})")
+        return 1
+
+    if not args.quiet:
+        print(t("signature.success"))
+    return 0
+
+
 def check_side_effects(args: argparse.Namespace) -> int:
     """執行全局副作用檢查 (僅警告)."""
     project_path = os.getcwd()
@@ -341,12 +367,20 @@ def check_all(args: argparse.Namespace) -> int:
     if check_cycles(args) != 0:
         exit_code = 1
 
-    # 5. 全局副作用檢查 (Warning only)
+    # 5. 跨檔案本地簽章驗證
+    if not args.quiet:
+        print(f"\n{t('check_all.signature_phase')}")
+    if check_signature(args) != 0:
+        exit_code = 1
+        if args.fail_fast:
+            return exit_code
+
+    # 6. 全局副作用檢查 (Warning only)
     if not args.quiet:
         print(f"\n{t('check_all.side_effects_phase')}")
     check_side_effects(args)
 
-    # 6. 死代碼掃描 (Warning only)
+    # 7. 死代碼掃描 (Warning only)
     if not args.quiet:
         print(f"\n{t('check_all.deadcode_phase')}")
     check_deadcode(args)
@@ -405,6 +439,10 @@ def main() -> None:
     cycles_parser = subparsers.add_parser("cycles", help=t("cli.help.cycles"))
     add_common_args(cycles_parser)
 
+    # signature 子指令
+    signature_parser = subparsers.add_parser("signature", help=t("cli.help.signature"))
+    add_common_args(signature_parser)
+
     # side-effects 子指令
     side_effects_parser = subparsers.add_parser("side-effects", help="檢查全局副作用 (警告層級)")
     add_common_args(side_effects_parser)
@@ -433,6 +471,8 @@ def main() -> None:
         exit_code = check_dependency(args)
     elif args.command == "cycles":
         exit_code = check_cycles(args)
+    elif args.command == "signature":
+        exit_code = check_signature(args)
     elif args.command == "side-effects":
         exit_code = check_side_effects(args)
     elif args.command == "deadcode":
