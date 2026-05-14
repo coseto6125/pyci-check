@@ -1,13 +1,13 @@
 """測試：測試純潔度與隔離性 (Test Purity)."""
-
-import os
-import subprocess
-import sys
+import pytest
 from pathlib import Path
+import argparse
+from pyci_check.cli import check_side_effects
 
-
-def test_purity_check_disabled_by_default(tmp_path: Path):
+def test_purity_check_disabled_by_default(tmp_path: Path, capsys, monkeypatch):
     """預設不開啟純潔度檢查，測試檔案中使用 socket 應該沒事."""
+    monkeypatch.chdir(tmp_path)
+
     test_file = tmp_path / "test_network.py"
     test_file.write_text("""
 import socket
@@ -16,29 +16,18 @@ def test_socket():
     s.close()
 """, encoding="utf-8")
 
-    # 執行 side-effects 檢查
-    env = os.environ.copy()
-    src_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src"))
-    if "PYTHONPATH" in env:
-        env["PYTHONPATH"] = f"{src_path}{os.pathsep}{env['PYTHONPATH']}"
-    else:
-        env["PYTHONPATH"] = src_path
-        
-    result = subprocess.run(
-        [sys.executable, "-m", "pyci_check.cli", "side-effects"],
-        check=False, cwd=str(tmp_path),
-        env=env,
-        capture_output=True,
-        text=True
-    )
+    args = argparse.Namespace(quiet=False)
+    exit_code = check_side_effects(args)
 
-    # 預期成功且沒有警告
-    assert result.returncode == 0, f"Expected 0, got {result.returncode}. stderr: {result.stderr}"
-    stdout = result.stdout or ""
-    assert "socket.socket" not in stdout
+    assert exit_code == 0
+    captured = capsys.readouterr()
+    assert "socket.socket" not in captured.out
 
-def test_purity_check_enabled_warns_on_socket(tmp_path: Path):
+
+def test_purity_check_enabled_warns_on_socket(tmp_path: Path, capsys, monkeypatch):
     """開啟純潔度檢查後，test_ 檔案使用 socket 會觸發警告."""
+    monkeypatch.chdir(tmp_path)
+    
     pyproject = tmp_path / "pyproject.toml"
     pyproject.write_text("""
 [tool.pyci-check]
@@ -52,30 +41,21 @@ def test_func():
     s = socket.socket()
 """, encoding="utf-8")
 
-    env = os.environ.copy()
-    src_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src"))
-    if "PYTHONPATH" in env:
-        env["PYTHONPATH"] = f"{src_path}{os.pathsep}{env['PYTHONPATH']}"
-    else:
-        env["PYTHONPATH"] = src_path
-        
-    result = subprocess.run(
-        [sys.executable, "-m", "pyci_check.cli", "side-effects"],
-        check=False, cwd=str(tmp_path),
-        env=env,
-        capture_output=True,
-        text=True
-    )
+    args = argparse.Namespace(quiet=False)
+    exit_code = check_side_effects(args)
 
     # 預期回傳 0 (因為只是 warning)
-    assert result.returncode == 0, f"Expected 0, got {result.returncode}. stderr: {result.stderr}"
+    assert exit_code == 0
+    
+    captured = capsys.readouterr()
     # 但應該要在 stdout 中看到警告
-    stdout = result.stdout or ""
-    assert "socket.socket" in stdout
-    assert "Impure test" in stdout
+    assert "socket.socket" in captured.out
+    assert "Impure test" in captured.out
 
-def test_purity_check_ignores_non_test_files(tmp_path: Path):
+def test_purity_check_ignores_non_test_files(tmp_path: Path, capsys, monkeypatch):
     """開啟純潔度檢查，但非 test_ 檔案使用 socket 不會觸發純潔度警告."""
+    monkeypatch.chdir(tmp_path)
+    
     pyproject = tmp_path / "pyproject.toml"
     pyproject.write_text("""
 [tool.pyci-check]
@@ -91,22 +71,9 @@ def connect():
     s.close()
 """, encoding="utf-8")
 
-    env = os.environ.copy()
-    src_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src"))
-    if "PYTHONPATH" in env:
-        env["PYTHONPATH"] = f"{src_path}{os.pathsep}{env['PYTHONPATH']}"
-    else:
-        env["PYTHONPATH"] = src_path
-        
-    result = subprocess.run(
-        [sys.executable, "-m", "pyci_check.cli", "side-effects"],
-        check=False, cwd=str(tmp_path),
-        env=env,
-        capture_output=True,
-        text=True
-    )
+    args = argparse.Namespace(quiet=False)
+    exit_code = check_side_effects(args)
 
-    # 預期成功且沒有警告
-    assert result.returncode == 0, f"Expected 0, got {result.returncode}. stderr: {result.stderr}"
-    stdout = result.stdout or ""
-    assert "socket.socket" not in stdout
+    assert exit_code == 0
+    captured = capsys.readouterr()
+    assert "socket.socket" not in captured.out

@@ -1,13 +1,15 @@
 """整合測試：CLI 命令與輸出."""
 
 import os
-import subprocess
-import sys
+import argparse
 from pathlib import Path
+from pyci_check.cli import check_dependency, check_cycles
 
 
-def test_cli_dependency_command(tmp_path: Path):
+def test_cli_dependency_command(tmp_path: Path, capsys, monkeypatch):
     """測試 dependency 命令與輸出."""
+    monkeypatch.chdir(tmp_path)
+    
     src_dir = tmp_path / "src"
     src_dir.mkdir()
 
@@ -21,34 +23,21 @@ dependencies = ["httpx"]
 src = ["src"]
 """, encoding="utf-8")
 
-    # 執行 CLI 命令
-    env = os.environ.copy()
-    # 確保 src 被加入 PYTHONPATH，使用絕對路徑
-    src_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src"))
-    if "PYTHONPATH" in env:
-        env["PYTHONPATH"] = f"{src_path}{os.pathsep}{env['PYTHONPATH']}"
-    else:
-        env["PYTHONPATH"] = src_path
+    args = argparse.Namespace(quiet=False)
+    exit_code = check_dependency(args)
 
-    result = subprocess.run(
-        [sys.executable, "-m", "pyci_check.cli", "dependency"],
-        cwd=str(tmp_path),
-        env=env,
-        capture_output=True,
-        text=True,
-        check=False
-    )
+    assert exit_code == 1
 
-    # 預期退出碼為 1 (發現問題)
-    assert result.returncode == 1, f"Expected 1, got {result.returncode}. stderr: {result.stderr}"
-
-    stdout = result.stdout or ""
-    # 應該要報 requests 是幽靈依賴
+    captured = capsys.readouterr()
+    stdout = captured.out
+    
     assert "requests" in stdout
-    # 應該要報 httpx 是冗餘依賴
     assert "httpx" in stdout
-def test_cli_cycles_command(tmp_path: Path):
+
+def test_cli_cycles_command(tmp_path: Path, capsys, monkeypatch):
     """測試 cycles 命令與輸出."""
+    monkeypatch.chdir(tmp_path)
+    
     src_dir = tmp_path / "src"
     src_dir.mkdir()
 
@@ -61,24 +50,13 @@ def test_cli_cycles_command(tmp_path: Path):
 src = ["src"]
 """, encoding="utf-8")
 
-    env = os.environ.copy()
-    src_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src"))
-    if "PYTHONPATH" in env:
-        env["PYTHONPATH"] = f"{src_path}{os.pathsep}{env['PYTHONPATH']}"
-    else:
-        env["PYTHONPATH"] = src_path
+    args = argparse.Namespace(quiet=False)
+    exit_code = check_cycles(args)
 
-    result = subprocess.run(
-        [sys.executable, "-m", "pyci_check.cli", "cycles"],
-        cwd=str(tmp_path),
-        env=env,
-        capture_output=True,
-        text=True,
-        check=False
-    )
-
-    assert result.returncode == 1, f"Expected 1, got {result.returncode}. stderr: {result.stderr}"
-    stdout = result.stdout or ""
+    assert exit_code == 1
+    
+    captured = capsys.readouterr()
+    stdout = captured.out
 
     assert "a.py -> src/b.py -> src/a.py" in stdout or "b.py -> src/a.py -> src/b.py" in stdout
 
