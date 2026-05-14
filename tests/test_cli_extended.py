@@ -56,7 +56,7 @@ src = ["src"]
     assert exit_code == 1
     
     captured = capsys.readouterr()
-    stdout = captured.out
+    stdout = captured.out.replace("\\", "/")
 
     assert "a.py -> src/b.py -> src/a.py" in stdout or "b.py -> src/a.py -> src/b.py" in stdout
 
