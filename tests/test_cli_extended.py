@@ -23,9 +23,10 @@ src = ["src"]
 
     # 執行 CLI 命令
     env = os.environ.copy()
-    src_path = os.path.join(os.getcwd(), "src")
+    # 確保 src 被加入 PYTHONPATH，使用絕對路徑
+    src_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src"))
     if "PYTHONPATH" in env:
-        env["PYTHONPATH"] = f"{env['PYTHONPATH']}{os.pathsep}{src_path}"
+        env["PYTHONPATH"] = f"{src_path}{os.pathsep}{env['PYTHONPATH']}"
     else:
         env["PYTHONPATH"] = src_path
 
@@ -61,9 +62,9 @@ src = ["src"]
 """, encoding="utf-8")
 
     env = os.environ.copy()
-    src_path = os.path.join(os.getcwd(), "src")
+    src_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src"))
     if "PYTHONPATH" in env:
-        env["PYTHONPATH"] = f"{env['PYTHONPATH']}{os.pathsep}{src_path}"
+        env["PYTHONPATH"] = f"{src_path}{os.pathsep}{env['PYTHONPATH']}"
     else:
         env["PYTHONPATH"] = src_path
 

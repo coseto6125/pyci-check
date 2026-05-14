@@ -18,9 +18,9 @@ def test_socket():
 
     # 執行 side-effects 檢查
     env = os.environ.copy()
-    src_path = os.path.join(os.getcwd(), "src")
+    src_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src"))
     if "PYTHONPATH" in env:
-        env["PYTHONPATH"] = f"{env['PYTHONPATH']}{os.pathsep}{src_path}"
+        env["PYTHONPATH"] = f"{src_path}{os.pathsep}{env['PYTHONPATH']}"
     else:
         env["PYTHONPATH"] = src_path
         
@@ -53,9 +53,9 @@ def test_func():
 """, encoding="utf-8")
 
     env = os.environ.copy()
-    src_path = os.path.join(os.getcwd(), "src")
+    src_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src"))
     if "PYTHONPATH" in env:
-        env["PYTHONPATH"] = f"{env['PYTHONPATH']}{os.pathsep}{src_path}"
+        env["PYTHONPATH"] = f"{src_path}{os.pathsep}{env['PYTHONPATH']}"
     else:
         env["PYTHONPATH"] = src_path
         
@@ -92,9 +92,9 @@ def connect():
 """, encoding="utf-8")
 
     env = os.environ.copy()
-    src_path = os.path.join(os.getcwd(), "src")
+    src_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src"))
     if "PYTHONPATH" in env:
-        env["PYTHONPATH"] = f"{env['PYTHONPATH']}{os.pathsep}{src_path}"
+        env["PYTHONPATH"] = f"{src_path}{os.pathsep}{env['PYTHONPATH']}"
     else:
         env["PYTHONPATH"] = src_path
         
