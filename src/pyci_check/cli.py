@@ -155,7 +155,7 @@ def check_imports(args: argparse.Namespace) -> int:
                 print(t("imports.statement", import_info["statement"]))
                 print(t("imports.reason", error_msg))
                 print(
-                    "   LLM Hint: Ensure this module is installed in your environment (e.g., check requirements.txt/pyproject.toml). If it is a local module, verify the path or module name spelling."
+                    "   Hint: Ensure this module is installed in your environment (e.g., check requirements.txt/pyproject.toml). If it is a local module, verify the path or module name spelling."
                 )
                 print()
                 total_errors += 1
@@ -210,14 +210,14 @@ def check_dependency(args: argparse.Namespace) -> int:
         print(t("dependency.phantom"))
         for p in sorted(issues["phantom"]):
             print(f"  - {p}")
-        print("  LLM Hint: Add the above packages to pyproject.toml or requirements.txt.")
+        print("  Hint: Add the above packages to pyproject.toml or requirements.txt.")
 
     if issues["orphan"]:
         # Orphan 視為警告，不一定導致 exit 1，但這裡我們先統一報出來
         print(t("dependency.orphan"))
         for p in sorted(issues["orphan"]):
             print(f"  - {p}")
-        print("  LLM Hint: Remove the above packages from pyproject.toml or requirements.txt as they are not imported anywhere.")
+        print("  Hint: Remove the above packages from pyproject.toml or requirements.txt as they are not imported anywhere.")
 
     if not has_issues:
         if not args.quiet:
@@ -251,7 +251,7 @@ def check_cycles(args: argparse.Namespace) -> int:
             rel_cycle = [safe_relpath(fp, project_path) for fp in cycle]
             print(f"  {i}. {' -> '.join(rel_cycle)}")
         print(
-            "  LLM Hint: Import cycles usually happen when two modules depend on each other. Consider extracting the shared logic into a third module, or move the import statement inside a function/method to defer evaluation."
+            "  Hint: Import cycles usually happen when two modules depend on each other. Consider extracting the shared logic into a third module, or move the import statement inside a function/method to defer evaluation."
         )
         return 1
 
@@ -304,7 +304,7 @@ def check_side_effects(args: argparse.Namespace) -> int:
             rel_file = safe_relpath(w["file"], project_path)
             print(f"  - {rel_file}:{w['line']} -> {w['call']} ({w['reason']})")
         print(
-            "  LLM Hint: Move top-level IO/Thread operations inside a function or a block like `if __name__ == '__main__':` to prevent slowing down module loading or polluting the global state."
+            "  Hint: Move top-level IO/Thread operations inside a function or a block like `if __name__ == '__main__':` to prevent slowing down module loading or polluting the global state."
         )
         # 僅警告，不回傳錯誤碼
         return 0
@@ -332,7 +332,7 @@ def check_deadcode(args: argparse.Namespace) -> int:
             rel_file = safe_relpath(w["file"], project_path)
             print(f"  - {w['name']} (in {rel_file}:{w['line']})")
         print(
-            "  LLM Hint: These functions or classes are defined but never called across the entire project. Consider removing them to simplify the codebase, unless they are public APIs meant for external use (in which case, add them to `__all__`)."
+            "  Hint: These functions or classes are defined but never called across the entire project. Consider removing them to simplify the codebase, unless they are public APIs meant for external use (in which case, add them to `__all__`)."
         )
         # 僅警告，不回傳錯誤碼
         return 0
