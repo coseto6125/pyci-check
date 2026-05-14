@@ -15,7 +15,6 @@ if sys.platform == "win32":
 from pyci_check.cycles import find_import_cycles
 from pyci_check.deadcode import scan_dead_code
 from pyci_check.dependency import find_dependency_issues
-from pyci_check.signature import check_signatures
 from pyci_check.git_hook import install_hooks, uninstall_hooks
 from pyci_check.i18n import t
 from pyci_check.imports import (
@@ -25,6 +24,7 @@ from pyci_check.imports import (
     get_venv_from_pyproject,
 )
 from pyci_check.side_effects import detect_side_effects
+from pyci_check.signature import check_signatures
 from pyci_check.syntax import check_files_parallel, find_python_files
 from pyci_check.utils import safe_relpath
 
@@ -127,7 +127,7 @@ def check_imports(args: argparse.Namespace) -> int:
         project_path,
         ignore_dirs=ignore_dirs,
         ignore_files=ignore_files,
-        target_files=target_files if target_files else None,
+        target_files=target_files or None,
     )
 
     if args.check_relative and all_relative_imports:
@@ -154,6 +154,9 @@ def check_imports(args: argparse.Namespace) -> int:
                 print(t("imports.file", rel_path, import_info["line"]))
                 print(t("imports.statement", import_info["statement"]))
                 print(t("imports.reason", error_msg))
+                print(
+                    "   LLM Hint: Ensure this module is installed in your environment (e.g., check requirements.txt/pyproject.toml). If it is a local module, verify the path or module name spelling."
+                )
                 print()
                 total_errors += 1
 
@@ -207,12 +210,14 @@ def check_dependency(args: argparse.Namespace) -> int:
         print(t("dependency.phantom"))
         for p in sorted(issues["phantom"]):
             print(f"  - {p}")
+        print("  LLM Hint: Add the above packages to pyproject.toml or requirements.txt.")
 
     if issues["orphan"]:
         # Orphan 視為警告，不一定導致 exit 1，但這裡我們先統一報出來
         print(t("dependency.orphan"))
         for p in sorted(issues["orphan"]):
             print(f"  - {p}")
+        print("  LLM Hint: Remove the above packages from pyproject.toml or requirements.txt as they are not imported anywhere.")
 
     if not has_issues:
         if not args.quiet:
@@ -245,6 +250,9 @@ def check_cycles(args: argparse.Namespace) -> int:
         for i, cycle in enumerate(cycles, 1):
             rel_cycle = [safe_relpath(fp, project_path) for fp in cycle]
             print(f"  {i}. {' -> '.join(rel_cycle)}")
+        print(
+            "  LLM Hint: Import cycles usually happen when two modules depend on each other. Consider extracting the shared logic into a third module, or move the import statement inside a function/method to defer evaluation."
+        )
         return 1
 
     if not args.quiet:
@@ -295,6 +303,9 @@ def check_side_effects(args: argparse.Namespace) -> int:
         for w in warnings:
             rel_file = safe_relpath(w["file"], project_path)
             print(f"  - {rel_file}:{w['line']} -> {w['call']} ({w['reason']})")
+        print(
+            "  LLM Hint: Move top-level IO/Thread operations inside a function or a block like `if __name__ == '__main__':` to prevent slowing down module loading or polluting the global state."
+        )
         # 僅警告，不回傳錯誤碼
         return 0
 
@@ -320,6 +331,9 @@ def check_deadcode(args: argparse.Namespace) -> int:
         for w in warnings:
             rel_file = safe_relpath(w["file"], project_path)
             print(f"  - {w['name']} (in {rel_file}:{w['line']})")
+        print(
+            "  LLM Hint: These functions or classes are defined but never called across the entire project. Consider removing them to simplify the codebase, unless they are public APIs meant for external use (in which case, add them to `__all__`)."
+        )
         # 僅警告，不回傳錯誤碼
         return 0
 
