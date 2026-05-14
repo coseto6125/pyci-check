@@ -23,7 +23,11 @@ src = ["src"]
 
     # 執行 CLI 命令
     env = os.environ.copy()
-    env["PYTHONPATH"] = f"{env.get('PYTHONPATH', '')}{os.pathsep}{os.getcwd()}/src"
+    src_path = os.path.join(os.getcwd(), "src")
+    if "PYTHONPATH" in env:
+        env["PYTHONPATH"] = f"{env['PYTHONPATH']}{os.pathsep}{src_path}"
+    else:
+        env["PYTHONPATH"] = src_path
 
     result = subprocess.run(
         [sys.executable, "-m", "pyci_check.cli", "dependency"],
@@ -35,14 +39,13 @@ src = ["src"]
     )
 
     # 預期退出碼為 1 (發現問題)
-    assert result.returncode == 1
+    assert result.returncode == 1, f"Expected 1, got {result.returncode}. stderr: {result.stderr}"
 
-    stdout = result.stdout
+    stdout = result.stdout or ""
     # 應該要報 requests 是幽靈依賴
     assert "requests" in stdout
     # 應該要報 httpx 是冗餘依賴
     assert "httpx" in stdout
-
 def test_cli_cycles_command(tmp_path: Path):
     """測試 cycles 命令與輸出."""
     src_dir = tmp_path / "src"
@@ -58,7 +61,11 @@ src = ["src"]
 """, encoding="utf-8")
 
     env = os.environ.copy()
-    env["PYTHONPATH"] = f"{env.get('PYTHONPATH', '')}{os.pathsep}{os.getcwd()}/src"
+    src_path = os.path.join(os.getcwd(), "src")
+    if "PYTHONPATH" in env:
+        env["PYTHONPATH"] = f"{env['PYTHONPATH']}{os.pathsep}{src_path}"
+    else:
+        env["PYTHONPATH"] = src_path
 
     result = subprocess.run(
         [sys.executable, "-m", "pyci_check.cli", "cycles"],
@@ -69,7 +76,8 @@ src = ["src"]
         check=False
     )
 
-    assert result.returncode == 1
-    stdout = result.stdout
+    assert result.returncode == 1, f"Expected 1, got {result.returncode}. stderr: {result.stderr}"
+    stdout = result.stdout or ""
 
     assert "a.py -> src/b.py -> src/a.py" in stdout or "b.py -> src/a.py -> src/b.py" in stdout
+

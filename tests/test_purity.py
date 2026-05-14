@@ -18,6 +18,12 @@ def test_socket():
 
     # 執行 side-effects 檢查
     env = os.environ.copy()
+    src_path = os.path.join(os.getcwd(), "src")
+    if "PYTHONPATH" in env:
+        env["PYTHONPATH"] = f"{env['PYTHONPATH']}{os.pathsep}{src_path}"
+    else:
+        env["PYTHONPATH"] = src_path
+        
     result = subprocess.run(
         [sys.executable, "-m", "pyci_check.cli", "side-effects"],
         check=False, cwd=str(tmp_path),
@@ -27,8 +33,9 @@ def test_socket():
     )
 
     # 預期成功且沒有警告
-    assert result.returncode == 0
-    assert "socket.socket" not in result.stdout
+    assert result.returncode == 0, f"Expected 0, got {result.returncode}. stderr: {result.stderr}"
+    stdout = result.stdout or ""
+    assert "socket.socket" not in stdout
 
 def test_purity_check_enabled_warns_on_socket(tmp_path: Path):
     """開啟純潔度檢查後，test_ 檔案使用 socket 會觸發警告."""
@@ -46,6 +53,12 @@ def test_func():
 """, encoding="utf-8")
 
     env = os.environ.copy()
+    src_path = os.path.join(os.getcwd(), "src")
+    if "PYTHONPATH" in env:
+        env["PYTHONPATH"] = f"{env['PYTHONPATH']}{os.pathsep}{src_path}"
+    else:
+        env["PYTHONPATH"] = src_path
+        
     result = subprocess.run(
         [sys.executable, "-m", "pyci_check.cli", "side-effects"],
         check=False, cwd=str(tmp_path),
@@ -55,10 +68,11 @@ def test_func():
     )
 
     # 預期回傳 0 (因為只是 warning)
-    assert result.returncode == 0
+    assert result.returncode == 0, f"Expected 0, got {result.returncode}. stderr: {result.stderr}"
     # 但應該要在 stdout 中看到警告
-    assert "socket.socket" in result.stdout
-    assert "Impure test" in result.stdout
+    stdout = result.stdout or ""
+    assert "socket.socket" in stdout
+    assert "Impure test" in stdout
 
 def test_purity_check_ignores_non_test_files(tmp_path: Path):
     """開啟純潔度檢查，但非 test_ 檔案使用 socket 不會觸發純潔度警告."""
@@ -78,6 +92,12 @@ def connect():
 """, encoding="utf-8")
 
     env = os.environ.copy()
+    src_path = os.path.join(os.getcwd(), "src")
+    if "PYTHONPATH" in env:
+        env["PYTHONPATH"] = f"{env['PYTHONPATH']}{os.pathsep}{src_path}"
+    else:
+        env["PYTHONPATH"] = src_path
+        
     result = subprocess.run(
         [sys.executable, "-m", "pyci_check.cli", "side-effects"],
         check=False, cwd=str(tmp_path),
@@ -87,5 +107,6 @@ def connect():
     )
 
     # 預期成功且沒有警告
-    assert result.returncode == 0
-    assert "socket.socket" not in result.stdout
+    assert result.returncode == 0, f"Expected 0, got {result.returncode}. stderr: {result.stderr}"
+    stdout = result.stdout or ""
+    assert "socket.socket" not in stdout
