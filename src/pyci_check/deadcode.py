@@ -135,6 +135,5 @@ def scan_dead_code(python_files: list[str]) -> list[dict]:
                 "reason": "Definition appears to be unused across the project"
             } for loc in locations)
 
-        return warnings
-    return None
+    return warnings
 
