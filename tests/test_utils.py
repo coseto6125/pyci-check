@@ -90,6 +90,26 @@ class TestUtils:
         found_rel = [os.path.relpath(path, temp_dir).replace("\\", "/") for path in found]
         assert found_rel == [".scripts/task.py", "keep/a.py"]
 
+    def test_walk_python_files_supports_wildcard_exclude(self, temp_dir):
+        """walk_python_files 應支援萬用字元排除模式 (例如 *.egg-info)."""
+        egg_info_dir = temp_dir / "project.egg-info"
+        egg_info_dir.mkdir()
+        (egg_info_dir / "top_level.txt").write_text("pyci_check\n", encoding="utf-8")
+        (egg_info_dir / "sources.py").write_text("SOURCES = []\n", encoding="utf-8")
+
+        normal_dir = temp_dir / "src"
+        normal_dir.mkdir()
+        (normal_dir / "main.py").write_text("print(1)\n", encoding="utf-8")
+
+        # 預設排除清單包含 *.egg-info
+        exclude_set = frozenset({"*.egg-info"})
+        found = walk_python_files(temp_dir, exclude_set)
+
+        found_rel = [os.path.relpath(path, temp_dir).replace("\\", "/") for path in found]
+        # 應排除 project.egg-info/sources.py
+        assert "src/main.py" in found_rel
+        assert not any("egg-info" in p for p in found_rel)
+
     def test_should_use_thread_pool_branches_for_cpu_and_io(self, monkeypatch):
         """覆蓋一般 GIL 與 free-threaded build 下的 thread pool 決策."""
         monkeypatch.setattr(utils, "IS_FREE_THREADED", False)

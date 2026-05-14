@@ -12,6 +12,8 @@ TRANSLATIONS = {
     "cli.help.subcommand": "子指令",
     "cli.help.syntax": "檢查 Python 語法",
     "cli.help.imports": "檢查 import 依賴",
+    "cli.help.dependency": "檢查依賴健康度 (幽靈/冗餘依賴)",
+    "cli.help.cycles": "檢查循環引用",
     "cli.help.install_hooks": "安裝 Git hooks",
     "cli.help.uninstall_hooks": "移除 Git hooks",
     "cli.help.hook_type": "Hook 類型 (預設: pre-commit)",
@@ -45,10 +47,31 @@ TRANSLATIONS = {
     "imports.success": "✓ 所有 import 依賴正確",
     "imports.summary.failed_modules": "失敗的模組數: {}",
     "imports.summary.total_errors": "總錯誤數量: {}",
+    # Dependency check
+    "dependency.checking": "檢查依賴健康度...",
+    "dependency.phantom": "❌ 幽靈依賴 (已使用但未宣告):",
+    "dependency.orphan": "⚠️  冗餘依賴 (已宣告但未使用):",
+    "dependency.success": "✓ 依賴健康度良好",
+    # Cycle check
+    "cycles.checking": "檢查循環引用...",
+    "cycles.found": "❌ 發現 {} 個循環引用:",
+    "cycles.success": "✓ 未發現循環引用",
+    # Side Effects check
+    "side_effects.checking": "檢查全局副作用...",
+    "side_effects.found": "⚠️  發現 {} 個全局副作用 (僅警告):",
+    "side_effects.success": "✓ 未發現全局副作用",
+    # Dead Code check
+    "deadcode.checking": "掃描深層死代碼...",
+    "deadcode.found": "⚠️  發現 {} 個可能未被使用的定義 (僅警告):",
+    "deadcode.success": "✓ 未發現死代碼",
     # Check all
     "check_all.start": "開始執行檢查...",
-    "check_all.syntax_phase": "[1/2] 語法檢查",
-    "check_all.imports_phase": "[2/2] Import 檢查",
+    "check_all.syntax_phase": "[1/6] 語法檢查",
+    "check_all.imports_phase": "[2/6] Import 檢查",
+    "check_all.dependency_phase": "[3/6] 依賴健康度檢查",
+    "check_all.cycles_phase": "[4/6] 循環引用檢查",
+    "check_all.side_effects_phase": "[5/6] 全局副作用檢查 (僅警告)",
+    "check_all.deadcode_phase": "[6/6] 深層死代碼掃描 (僅警告)",
     "check_all.success": "✓ 所有檢查通過",
     "check_all.errors": "✗ 發現錯誤",
     # Git hooks
