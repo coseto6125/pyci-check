@@ -7,7 +7,7 @@
 
 import ast
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from pyci_check.corpus import Corpus
 from pyci_check.findings import Finding
@@ -28,6 +28,9 @@ class Signature:
     has_varargs: bool
     has_varkw: bool
     is_method: bool = False
+    field_signature_kind: str | None = None
+    field_signature_allows_missing: bool = False
+    field_signature_required_names: frozenset[str] = frozenset()
 
     @property
     def all_arg_names(self) -> set[str]:
@@ -41,60 +44,174 @@ class DefinitionCollector(ast.NodeVisitor):
         self.module_name = module_name
         # name -> Signature
         self.signatures: dict[str, Signature] = {}
+        self.inherited_classes: dict[str, list[str]] = {}
+        self.inherited_fields: dict[str, tuple[set[str], set[str]]] = {}
+        self.imports: dict[str, str] = {}
         self.current_class: str | None = None
 
-    def visit_ClassDef(self, node: ast.ClassDef):
-        prev_class = self.current_class
-        self.current_class = node.name
+    def visit_Import(self, node: ast.Import):
+        for alias in node.names:
+            self.imports[alias.asname or alias.name] = alias.name
 
-        # 檢查是否為 dataclass
-        is_dataclass = any(
-            (isinstance(d, ast.Name) and d.id == "dataclass") or (isinstance(d, ast.Call) and getattr(d.func, "id", "") == "dataclass")
-            for d in node.decorator_list
-        )
+    def visit_ImportFrom(self, node: ast.ImportFrom):
+        if not node.module or node.level > 0:
+            return
 
-        if is_dataclass:
-            # 蒐集所有的 field
-            fields = [stmt.target.id for stmt in node.body if isinstance(stmt, ast.AnnAssign) and isinstance(stmt.target, ast.Name)]
+        for alias in node.names:
+            self.imports[alias.asname or alias.name] = f"{node.module}.{alias.name}"
 
-            self.signatures[node.name] = Signature(
-                module=self.module_name,
-                name=node.name,
-                min_pos=0,  # dataclass 的 default 值較難靜態推導，這裡放寬必填檢查
-                max_pos=len(fields),
-                pos_arg_names=set(fields),
-                kwonly_args=set(),
-                required_kwonly=set(),
-                has_varargs=False,
-                has_varkw=False,
-            )
-        else:
-            # 預設一個空的建構子
-            self.signatures[node.name] = Signature(
+    def _resolve_name(self, node: ast.expr) -> str | None:
+        if isinstance(node, ast.Name):
+            return self.imports.get(node.id, f"{self.module_name}.{node.id}")
+        if isinstance(node, ast.Attribute) and (base := self._resolve_name(node.value)):
+            return f"{base}.{node.attr}"
+        return None
+
+    def _decorator_name(self, decorator: ast.expr) -> str | None:
+        if isinstance(decorator, ast.Call):
+            decorator = decorator.func
+        return self._resolve_name(decorator)
+
+    def _class_fields(self, node: ast.ClassDef) -> list[ast.AnnAssign]:
+        fields = []
+        for stmt in node.body:
+            if not isinstance(stmt, ast.AnnAssign) or not isinstance(stmt.target, ast.Name):
+                continue
+            annotation = stmt.annotation.value if isinstance(stmt.annotation, ast.Subscript) else stmt.annotation
+            if self._resolve_name(annotation) != "typing.ClassVar":
+                fields.append(stmt)
+        return fields
+
+    @staticmethod
+    def _has_true_keyword(keywords: list[ast.keyword], name: str) -> bool:
+        return any(keyword.arg == name and isinstance(keyword.value, ast.Constant) and keyword.value.value is True for keyword in keywords)
+
+    def _field_signature(self, node: ast.ClassDef, *, keyword_only: bool, allow_missing: bool = False) -> Signature:
+        fields = self._class_fields(node)
+        field_names = {field.target.id for field in fields}
+        required_names = {field.target.id for field in fields if field.value is None}
+
+        if keyword_only:
+            return Signature(
                 module=self.module_name,
                 name=node.name,
                 min_pos=0,
                 max_pos=0,
                 pos_arg_names=set(),
-                kwonly_args=set(),
-                required_kwonly=set(),
+                kwonly_args=field_names,
+                required_kwonly=set() if allow_missing else required_names,
                 has_varargs=False,
                 has_varkw=False,
+                field_signature_kind="keyword_only",
+                field_signature_allows_missing=allow_missing,
+                field_signature_required_names=frozenset(required_names),
             )
 
-        self.generic_visit(node)
+        return Signature(
+            module=self.module_name,
+            name=node.name,
+            min_pos=0 if allow_missing else len(required_names),
+            max_pos=len(fields),
+            pos_arg_names=field_names,
+            kwonly_args=set(),
+            required_kwonly=set(),
+            has_varargs=False,
+            has_varkw=False,
+            field_signature_kind="positional",
+            field_signature_allows_missing=allow_missing,
+            field_signature_required_names=frozenset(required_names),
+        )
+
+    def visit_ClassDef(self, node: ast.ClassDef):
+        if self.current_class is not None:
+            return
+
+        prev_class = self.current_class
+        self.current_class = node.name
+
+        decorator_names = {self._decorator_name(decorator) for decorator in node.decorator_list}
+        is_dataclass = len(node.decorator_list) == 1 and (
+            "dataclasses.dataclass" in decorator_names
+            or any(
+                isinstance(decorator.func if isinstance(decorator, ast.Call) else decorator, ast.Name)
+                and (decorator.func if isinstance(decorator, ast.Call) else decorator).id == "dataclass"
+                for decorator in node.decorator_list
+            )
+        )
+        base_names = [name for base in node.bases if (name := self._resolve_name(base)) is not None]
+        is_msgspec_struct = "msgspec.Struct" in base_names
+        is_named_tuple = "typing.NamedTuple" in base_names or any(isinstance(base, ast.Name) and base.id == "NamedTuple" for base in node.bases)
+        has_explicit_constructor = any(
+            isinstance(stmt, (ast.FunctionDef, ast.AsyncFunctionDef)) and stmt.name in ("__init__", "__new__") for stmt in node.body
+        )
+
+        if not has_explicit_constructor:
+            if is_dataclass:
+                self.signatures[node.name] = self._field_signature(
+                    node,
+                    keyword_only=self._has_true_keyword(
+                        [keyword for decorator in node.decorator_list if isinstance(decorator, ast.Call) for keyword in decorator.keywords],
+                        "kw_only",
+                    ),
+                    allow_missing=True,
+                )
+            elif is_msgspec_struct and not node.decorator_list:
+                self.signatures[node.name] = self._field_signature(
+                    node,
+                    keyword_only=self._has_true_keyword(node.keywords, "kw_only"),
+                )
+            elif is_named_tuple and not node.decorator_list:
+                self.signatures[node.name] = self._field_signature(node, keyword_only=False)
+            elif not node.bases and not node.decorator_list and not node.keywords:
+                self.signatures[node.name] = Signature(
+                    module=self.module_name,
+                    name=node.name,
+                    min_pos=0,
+                    max_pos=0,
+                    pos_arg_names=set(),
+                    kwonly_args=set(),
+                    required_kwonly=set(),
+                    has_varargs=False,
+                    has_varkw=False,
+                )
+            elif len(node.bases) == 1 and not node.decorator_list and not node.keywords and len(base_names) == 1:
+                self.inherited_classes[node.name] = base_names
+                fields = self._class_fields(node)
+                self.inherited_fields[node.name] = (
+                    {field.target.id for field in fields},
+                    {field.target.id for field in fields if field.value is None},
+                )
+
+        for stmt in node.body:
+            if isinstance(stmt, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                self.visit(stmt)
+
         self.current_class = prev_class
 
     def visit_FunctionDef(self, node: ast.FunctionDef):
         self._parse_function(node)
-        self.generic_visit(node)
 
     def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef):
         self._parse_function(node)
-        self.generic_visit(node)
 
     def _parse_function(self, node: ast.FunctionDef | ast.AsyncFunctionDef):
+        decorator_names = {self._decorator_name(decorator) for decorator in node.decorator_list}
+        known_method_decorators = {
+            f"{self.module_name}.classmethod",
+            f"{self.module_name}.staticmethod",
+        }
+        signature_preserving_decorators = {
+            "functools.cache",
+            "functools.lru_cache",
+        }
+        known_decorators = known_method_decorators | signature_preserving_decorators
+        if node.decorator_list and not decorator_names <= known_decorators:
+            # Unknown decorators may replace the callable or alter its runtime
+            # signature. Skipping loses coverage but avoids an unverifiable error.
+            return
+
         is_method = self.current_class is not None
+        is_staticmethod = f"{self.module_name}.staticmethod" in decorator_names
 
         # 收集參數
         pos_args = []
@@ -102,8 +219,8 @@ class DefinitionCollector(ast.NodeVisitor):
             pos_args.extend(node.args.posonlyargs)
         pos_args.extend(node.args.args)
 
-        # 扣掉 self/cls
-        if is_method and pos_args and not (node.name == "__new__" and not pos_args):
+        # 扣掉 self/cls；staticmethod 沒有隱含接收者
+        if is_method and not is_staticmethod and pos_args:
             pos_args = pos_args[1:]
 
         pos_arg_names = {a.arg for a in pos_args}
@@ -323,6 +440,8 @@ def check_signatures(
     """
     # 1. 收集所有的簽章 (Full Qualified Name -> Signature)
     global_signatures: dict[str, Signature] = {}
+    inherited_classes: dict[str, list[str]] = {}
+    inherited_fields: dict[str, tuple[set[str], set[str]]] = {}
     file_asts: dict[str, ast.Module] = {}
     file_modules: dict[str, str] = {}
 
@@ -335,11 +454,49 @@ def check_signatures(
         collector = DefinitionCollector(mod_name)
         collector.visit(tree)
 
-        for local_name, sig in collector.signatures.items():
-            global_signatures[f"{mod_name}.{local_name}"] = sig
+            for local_name, sig in collector.signatures.items():
+                global_signatures[f"{mod_name}.{local_name}"] = sig
+            for local_name, bases in collector.inherited_classes.items():
+                class_name = f"{mod_name}.{local_name}"
+                inherited_classes[class_name] = bases
+                inherited_fields[class_name] = collector.inherited_fields[local_name]
 
         file_asts[filepath] = tree
         file_modules[filepath] = mod_name
+
+    # 只有單一父類的簽章能被明確解析時才沿用；其餘類別不做推測。
+    while inherited_classes:
+        resolved = {
+            class_name: bases[0] for class_name, bases in inherited_classes.items() if len(bases) == 1 and bases[0] in global_signatures
+        }
+        if not resolved:
+            break
+        for class_name, base_name in resolved.items():
+            module, name = class_name.rsplit(".", 1)
+            base_signature = global_signatures[base_name]
+            field_names, required_fields = inherited_fields[class_name]
+            signature = replace(base_signature, module=module, name=name, is_method=False)
+            merged_required_fields = (set(base_signature.field_signature_required_names) - field_names) | required_fields
+            effective_required_fields = set() if base_signature.field_signature_allows_missing else merged_required_fields
+            if base_signature.field_signature_kind == "keyword_only":
+                signature = replace(
+                    signature,
+                    kwonly_args=base_signature.kwonly_args | field_names,
+                    required_kwonly=effective_required_fields,
+                    field_signature_required_names=frozenset(merged_required_fields),
+                )
+            elif base_signature.field_signature_kind == "positional":
+                positional_names = base_signature.pos_arg_names | field_names
+                signature = replace(
+                    signature,
+                    min_pos=len(effective_required_fields),
+                    max_pos=len(positional_names),
+                    pos_arg_names=positional_names,
+                    field_signature_required_names=frozenset(merged_required_fields),
+                )
+            global_signatures[class_name] = signature
+            del inherited_classes[class_name]
+            del inherited_fields[class_name]
 
     # 2. 驗證所有檔案
     all_errors: list[Finding] = []
