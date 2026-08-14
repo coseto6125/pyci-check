@@ -21,6 +21,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   constructors are skipped.
 - Qualified `@dataclasses.dataclass`, `msgspec.Struct`, `NamedTuple`, and
   `staticmethod` signatures are handled without the previous false positives.
+- Definitions are indexed under both project-relative and configured
+  source-root-relative module names, so imports that retain a source directory
+  package prefix resolve to the same signature. Previously a call written as
+  `from pkg.mod import Thing` never matched a definition indexed as `mod.Thing`,
+  and every cross-file call of that shape went unchecked.
 
 
 ### Planned

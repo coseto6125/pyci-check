@@ -242,6 +242,36 @@ Child(1, wrong=2)
     assert "Unexpected keyword arguments: wrong" in errors[0]["reason"]
 
 
+def test_check_signatures_cross_file_import_matches_project_relative_alias(tmp_path: Path):
+    package = tmp_path / "enoract" / "chat" / "retrieval"
+    package.mkdir(parents=True)
+    manager = package / "manager.py"
+    manager.write_text(
+        """
+import msgspec
+
+class ReplicaOutcome(msgspec.Struct, kw_only=True):
+    status: str
+""",
+        encoding="utf-8",
+    )
+    consumer = tmp_path / "consumer.py"
+    consumer.write_text(
+        """
+from enoract.chat.retrieval.manager import ReplicaOutcome
+
+ReplicaOutcome(status="ok")
+ReplicaOutcome(bogus=1)
+""",
+        encoding="utf-8",
+    )
+
+    errors = check_signatures([str(manager), str(consumer)], str(tmp_path), ["enoract"])
+
+    assert len(errors) == 1
+    assert "Unexpected keyword arguments: bogus" in errors[0]["reason"]
+
+
 def test_check_signatures_qualified_dataclass_decorator(tmp_path: Path):
     errors = _check_source(
         tmp_path,

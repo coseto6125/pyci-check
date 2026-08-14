@@ -403,20 +403,28 @@ class CallValidator(ast.NodeVisitor):
         self.errors.append(Finding(file=self.filepath, line=lineno, message=f"{func} ({detailed_reason})", severity="error"))
 
 
-def _get_module_name(filepath: str, project_dir: str, src_dirs: list[str]) -> str:
-    """將檔案路徑轉換為模組名稱."""
+def _get_module_names(filepath: str, project_dir: str, src_dirs: list[str]) -> set[str]:
+    """取得檔案相對於專案與 source roots 的所有可能模組名稱."""
     abs_fp = os.path.abspath(filepath)
     roots = [os.path.abspath(project_dir)]
     roots.extend(os.path.abspath(os.path.join(project_dir, s)) for s in src_dirs)
 
-    best_mod = None
+    modules = set()
     for root in roots:
-        if abs_fp.startswith(root):
+        try:
+            is_relative = os.path.commonpath((abs_fp, root)) == root
+        except ValueError:
+            is_relative = False
+        if is_relative:
             rel = os.path.relpath(abs_fp, root)
             mod = rel.replace(os.sep, ".").removesuffix(".py").removesuffix(".__init__")
-            if best_mod is None or len(mod) < len(best_mod):
-                best_mod = mod
-    return best_mod or os.path.basename(filepath).removesuffix(".py")
+            modules.add(mod)
+    return modules or {os.path.basename(filepath).removesuffix(".py")}
+
+
+def _get_module_name(filepath: str, project_dir: str, src_dirs: list[str]) -> str:
+    """將檔案路徑轉換為最短模組名稱."""
+    return min(_get_module_names(filepath, project_dir, src_dirs), key=len)
 
 
 def check_signatures(
@@ -450,14 +458,17 @@ def check_signatures(
     trees = corpus.trees if corpus is not None else Corpus.load(python_files).trees
     for filepath, tree in trees.items():
         mod_name = _get_module_name(filepath, project_dir, src_dirs)
+        module_names = _get_module_names(filepath, project_dir, src_dirs)
 
         collector = DefinitionCollector(mod_name)
         collector.visit(tree)
 
-            for local_name, sig in collector.signatures.items():
-                global_signatures[f"{mod_name}.{local_name}"] = sig
-            for local_name, bases in collector.inherited_classes.items():
-                class_name = f"{mod_name}.{local_name}"
+        for local_name, sig in collector.signatures.items():
+            for module_name in module_names:
+                global_signatures[f"{module_name}.{local_name}"] = sig
+        for local_name, bases in collector.inherited_classes.items():
+            for module_name in module_names:
+                class_name = f"{module_name}.{local_name}"
                 inherited_classes[class_name] = bases
                 inherited_fields[class_name] = collector.inherited_fields[local_name]
 
