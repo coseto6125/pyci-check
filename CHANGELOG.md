@@ -14,6 +14,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   ships a single LICENSE rather than per-file headers, and `PLR0917` takes the
   same stance as the already-ignored `PLR0913`.
 
+### Fixed
+
+- Generated git hooks resolve `ruff` and `pyci-check` from the project virtual
+  environment before falling back to `PATH`. A tool taken from `PATH` can be a
+  different version than the project pins, so the hook could reject code that
+  the project's own toolchain accepts. The lookup covers both `bin` and
+  `Scripts` layouts, and a linked worktree without its own venv falls back to
+  the main checkout's. Existing checkouts keep their current hook until
+  `pyci-check install-hooks` is run again.
+
 ### Planned
 - Persistent worker pool for execute mode (multi-worker fan-out)
 - find_spec cache invalidation by dist-info mtime instead of whole sys.path

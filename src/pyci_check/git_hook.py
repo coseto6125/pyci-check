@@ -72,22 +72,77 @@ def get_changed_python_files(remote_branch: str = "origin/main") -> list[str]:
 PYCI_CHECK_START_MARKER = "# >>> pyci-check start >>>"
 PYCI_CHECK_END_MARKER = "# <<< pyci-check end <<<"
 
-PRE_COMMIT_HOOK_CONTENT = """# Check for staged Python files
+# Resolve a tool from the project venv before falling back to PATH. A tool found
+# on PATH can be a different version than the project pins, and then the hook
+# rejects code that the project's own toolchain accepts -- a newer ruff
+# stabilizes rules the pinned one never applies.
+#
+# Properties this snippet has to keep, each one learned from a break:
+#   * it always exits 0, because the hooks run under `set -e` and the caller
+#     assigns the result with `TOOL=$(pyci_resolve ...)`. A non-zero exit there
+#     aborts the whole hook, so "tool is absent" would kill the commit instead
+#     of printing the skip notice.
+#   * a linked git worktree usually has no venv of its own, so the main
+#     checkout holding the common git dir is searched too.
+#   * `git rev-parse` locates that main checkout. Git prepends its own exec-path
+#     to the hook's PATH, so `git` is reachable from a hook that has not
+#     reassigned PATH itself -- coreutils never are. The rest of the snippet
+#     therefore uses shell builtins only: the path arithmetic is parameter
+#     expansion, not `dirname`, because that is an external program.
+#   * deriving the main checkout from the shape of `GIT_DIR` instead was tried
+#     and reverted: a repository stored under a directory literally named
+#     `worktrees` made the string surgery strip two levels too many, and the
+#     resolver then ran an unrelated venv's tool. `GIT_DIR` would still answer
+#     behind a PATH-reassigning prelude, where `git rev-parse` cannot, but the
+#     hook body needs `grep` on that same PATH and skips every check without it,
+#     so nothing reads the resolver's answer there anyway.
+#   * Windows venvs put executables in `Scripts`, not `bin`.
+RESOLVE_TOOL_SNIPPET = """pyci_resolve() {
+    pyci_tool=$1
+
+    pyci_main=$(git rev-parse --git-common-dir 2>/dev/null) || pyci_main=""
+
+    case $pyci_main in
+        */*) pyci_main=${pyci_main%/*} ;;
+        *) pyci_main="." ;;
+    esac
+
+    set -- "./.venv/bin/$pyci_tool" "./.venv/Scripts/$pyci_tool" \
+           "./venv/bin/$pyci_tool" "./venv/Scripts/$pyci_tool" \
+           "$pyci_main/.venv/bin/$pyci_tool" "$pyci_main/.venv/Scripts/$pyci_tool" \
+           "$pyci_main/venv/bin/$pyci_tool" "$pyci_main/venv/Scripts/$pyci_tool"
+
+    for candidate do
+        if [ -f "$candidate" ] && [ -x "$candidate" ]; then
+            printf '%s' "$candidate"
+            return 0
+        fi
+    done
+
+    command -v "$pyci_tool" 2>/dev/null || true
+}
+"""
+
+PRE_COMMIT_HOOK_CONTENT = (
+    RESOLVE_TOOL_SNIPPET
+    + """
+# Check for staged Python files
 STAGED_PY_FILES=$(git diff --cached --name-only --diff-filter=ACM | grep -E '\\.py$' || true)
 
 if [ -n "$STAGED_PY_FILES" ]; then
     echo "Running local CI checks..."
 
     # 1. Ruff Format Check
-    if command -v ruff &> /dev/null; then
-        echo "Running Ruff formatter..."
-        if ! ruff format --check $STAGED_PY_FILES; then
+    RUFF=$(pyci_resolve ruff)
+    if [ -n "$RUFF" ]; then
+        echo "Running Ruff formatter ($RUFF)..."
+        if ! "$RUFF" format --check $STAGED_PY_FILES; then
             echo "❌ Formatting errors found. Please run 'ruff format .' to fix them."
             exit 1
         fi
 
         echo "Running Ruff linter..."
-        if ! ruff check $STAGED_PY_FILES; then
+        if ! "$RUFF" check $STAGED_PY_FILES; then
             echo "❌ Linting errors found. Please fix them before committing."
             exit 1
         fi
@@ -97,8 +152,9 @@ if [ -n "$STAGED_PY_FILES" ]; then
 
     # 2. pyci-check
     echo "Running pyci-check..."
-    if command -v pyci-check &> /dev/null; then
-        if ! pyci-check check $STAGED_PY_FILES --quiet --fail-fast; then
+    PYCI_CHECK=$(pyci_resolve pyci-check)
+    if [ -n "$PYCI_CHECK" ]; then
+        if ! "$PYCI_CHECK" check $STAGED_PY_FILES --quiet --fail-fast; then
             echo "❌ Architecture or dependency checks failed."
             exit 1
         fi
@@ -111,8 +167,12 @@ if [ -n "$STAGED_PY_FILES" ]; then
     echo "✅ All local CI checks passed!"
 fi
 """
+)
 
-PRE_PUSH_HOOK_CONTENT = """# Check for changed Python files
+PRE_PUSH_HOOK_CONTENT = (
+    RESOLVE_TOOL_SNIPPET
+    + """
+# Check for changed Python files
 CHANGED_PY_FILES=$(git diff --name-only origin/main...HEAD 2>/dev/null | grep -E '\\.py$' || \
                    git diff --name-only HEAD~1...HEAD 2>/dev/null | grep -E '\\.py$' || true)
 
@@ -120,8 +180,9 @@ if [ -n "$CHANGED_PY_FILES" ]; then
     echo "Running pyci-check..."
 
     # Run checks
-    if command -v pyci-check &> /dev/null; then
-        pyci-check check $CHANGED_PY_FILES --quiet --fail-fast
+    PYCI_CHECK=$(pyci_resolve pyci-check)
+    if [ -n "$PYCI_CHECK" ]; then
+        "$PYCI_CHECK" check $CHANGED_PY_FILES --quiet --fail-fast
     else
         echo "Error: pyci-check not installed"
         echo "Please run: pip install pyci-check"
@@ -129,6 +190,7 @@ if [ -n "$CHANGED_PY_FILES" ]; then
     fi
 fi
 """
+)
 
 
 def add_or_update_hook_content(hook_path: str, hook_content: str) -> bool:
