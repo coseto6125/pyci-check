@@ -1,9 +1,9 @@
 """整合測試：CLI 命令與輸出."""
 
-import os
 import argparse
 from pathlib import Path
-from pyci_check.cli import check_dependency, check_cycles
+
+from pyci_check.cli import check_cycles, check_dependency
 
 
 def test_cli_dependency_command(tmp_path: Path, capsys, monkeypatch):

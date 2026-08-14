@@ -34,7 +34,7 @@ dependencies = []
 dev = [
     "pytest>=9.0.0",
     "pytest-cov>=7.0.0",
-    "ruff>=0.15.0",
+    "ruff>=0.16.3",
 ]
 
 [project.urls]
@@ -175,6 +175,7 @@ ignore = [
   "BLE001", # except 不可直接捕獲 Exception
   "C901", # 過度複雜的函式（圈複雜度過高）
   "COM812", # 參數結尾缺逗號
+  "CPY001", # 檔案開頭缺版權宣告（ruff 0.16 起轉正式規則；本專案採單一 LICENSE，不逐檔標頭）
   "D100", # 公開模組未寫 docstring
   "D101", # 公開類別未寫 docstring
   "D102", # 公開方法未寫 docstring
@@ -212,6 +213,7 @@ ignore = [
   "PLR0912", # 分支判斷過多
   "PLR0913", # 參數數量過多
   "PLR0915", # 敘述行數過多
+  "PLR0917", # 位置參數數量過多（ruff 0.16 起轉正式規則；與已忽略的 PLR0913 同立場）
   "PLR2004", # 直接在比較中寫死數字
   "PLW0602", # 使用 global 但未賦值（Lambda 快取場景需要）
   "PLW0603", # 使用 global 更新變量（Lambda 快取場景需要）
@@ -307,5 +309,5 @@ project-excludes = ["venv/**", "build/**", ".venv/**"]
 dev = [
     "pytest>=8.3.0",
     "pytest-cov>=6.0.0",
-    "ruff>=0.15.0",
+    "ruff>=0.16.3",
 ]

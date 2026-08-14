@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Development pins `ruff>=0.16.3`. 0.16 stabilized `CPY001` and `PLR0917`,
+  which `select = ["ALL"]` then picks up; both are now ignored — the project
+  ships a single LICENSE rather than per-file headers, and `PLR0917` takes the
+  same stance as the already-ignored `PLR0913`.
+
 ### Planned
 - Persistent worker pool for execute mode (multi-worker fan-out)
 - find_spec cache invalidation by dist-info mtime instead of whole sys.path

@@ -1,8 +1,8 @@
 """測試：測試純潔度與隔離性 (Test Purity)."""
 
-import pytest
-from pathlib import Path
 import argparse
+from pathlib import Path
+
 from pyci_check.cli import check_side_effects
 
 
