@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Planned
+
+## [0.3.4] - 2026-08-22
+
+Patch release: hardening fixes from the post-release deep review of the
+architecture work, plus hot-path cleanup. No behavior change beyond the
+malformed-config contract.
+
 ### Fixed
 
 - `config.load` no longer crashes with `AttributeError` on a malformed
@@ -16,6 +24,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Side-effect scanning hoists the dangerous-call table to a module constant
   and moves `import os` out of the per-file visitor constructor (~8% faster
   on a 400-file synthetic corpus, identical output).
+- `language` is stored already stripped in `ProjectConfig`; `get_locale`
+  drops its compensating `.strip()`.
 
 ### Planned
 - Persistent worker pool for execute mode (multi-worker fan-out)
@@ -358,7 +368,8 @@ leaving "does it import successfully?" to `--i-understand-this-will-execute-code
   - Automated release workflow
   - PyPI publishing support (Trusted Publisher)
 
-[Unreleased]: https://github.com/coseto6125/pyci-check/compare/v0.3.3...HEAD
+[Unreleased]: https://github.com/coseto6125/pyci-check/compare/v0.3.4...HEAD
+[0.3.4]: https://github.com/coseto6125/pyci-check/compare/v0.3.3...v0.3.4
 [0.3.3]: https://github.com/coseto6125/pyci-check/compare/v0.2.0...v0.3.3
 [0.2.0]: https://github.com/coseto6125/pyci-check/compare/v0.1.6...v0.2.0
 [0.1.6]: https://github.com/coseto6125/pyci-check/compare/v0.1.5...v0.1.6
