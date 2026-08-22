@@ -12,21 +12,24 @@ if sys.platform == "win32":
     if sys.stderr.encoding != "utf-8":
         sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
 
+from typing import TYPE_CHECKING
+
+from pyci_check.config import load, resolve_venv
+from pyci_check.corpus import Corpus
 from pyci_check.cycles import find_import_cycles
 from pyci_check.deadcode import scan_dead_code
 from pyci_check.dependency import find_dependency_issues
+from pyci_check.findings import has_errors, render_findings
 from pyci_check.git_hook import install_hooks, uninstall_hooks
 from pyci_check.i18n import t
-from pyci_check.imports import (
-    check_missing_modules,
-    extract_from_all_files,
-    get_ruff_config_from_pyproject,
-    get_venv_from_pyproject,
-)
+from pyci_check.imports import check_missing_modules, extract_from_all_files
 from pyci_check.side_effects import detect_side_effects
 from pyci_check.signature import check_signatures
 from pyci_check.syntax import check_files_parallel, find_python_files
 from pyci_check.utils import safe_relpath
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 
 def check_syntax(args: argparse.Namespace) -> int:
@@ -75,24 +78,13 @@ def check_imports(args: argparse.Namespace) -> int:
     # 判斷使用靜態檢查還是真實執行
     use_static = not getattr(args, "i_understand_this_will_execute_code", False)
 
-    ruff_config = get_ruff_config_from_pyproject(project_path)
+    cfg = load(project_path)
+    src_dirs = list(cfg.src_dirs)
+    ignore_dirs = cfg.exclude_dirs
+    ignore_files = cfg.exclude_files
 
-    src_dirs = ruff_config["src"]
-    ignore_dirs = set(ruff_config["exclude_dirs"])
-    ignore_files = set(ruff_config["exclude_files"])
-
-    # 取得 venv 路徑 (優先順序: CLI 參數 > pyproject.toml > 自動偵測 .venv)
-    venv_path = getattr(args, "venv", None)
-
-    if not venv_path:
-        # 從 pyproject.toml 讀取
-        venv_path = get_venv_from_pyproject(project_path)
-
-    if not venv_path:
-        # 自動偵測 .venv
-        venv_dir = os.path.join(project_path, ".venv")
-        if os.path.exists(venv_dir):
-            venv_path = "."
+    # venv 優先順序 (CLI 參數 > pyproject.toml > 自動偵測 .venv) 集中在 config.resolve_venv
+    venv_path = resolve_venv(getattr(args, "venv", None), cfg)
 
     if not args.quiet:
         print(t("imports.checking"))
@@ -154,9 +146,7 @@ def check_imports(args: argparse.Namespace) -> int:
                 print(t("imports.file", rel_path, import_info["line"]))
                 print(t("imports.statement", import_info["statement"]))
                 print(t("imports.reason", error_msg))
-                print(
-                    "   Hint: Ensure this module is installed in your environment (e.g., check requirements.txt/pyproject.toml). If it is a local module, verify the path or module name spelling."
-                )
+                print("   " + t("hint.imports.install"))
                 print()
                 total_errors += 1
 
@@ -176,10 +166,10 @@ def check_imports(args: argparse.Namespace) -> int:
 def check_dependency(args: argparse.Namespace) -> int:
     """執行依賴健康度檢查."""
     project_path = os.getcwd()
-    ruff_config = get_ruff_config_from_pyproject(project_path)
-    ignore_dirs = set(ruff_config["exclude_dirs"])
-    ignore_files = set(ruff_config["exclude_files"])
-    src_dirs = ruff_config["src"]
+    cfg = load(project_path)
+    ignore_dirs = cfg.exclude_dirs
+    ignore_files = cfg.exclude_files
+    src_dirs = list(cfg.src_dirs)
 
     if not args.quiet:
         print(t("dependency.checking"))
@@ -210,14 +200,14 @@ def check_dependency(args: argparse.Namespace) -> int:
         print(t("dependency.phantom"))
         for p in sorted(issues["phantom"]):
             print(f"  - {p}")
-        print("  Hint: Add the above packages to pyproject.toml or requirements.txt.")
+        print("  " + t("hint.dependency.add"))
 
     if issues["orphan"]:
         # Orphan 視為警告，不一定導致 exit 1，但這裡我們先統一報出來
         print(t("dependency.orphan"))
         for p in sorted(issues["orphan"]):
             print(f"  - {p}")
-        print("  Hint: Remove the above packages from pyproject.toml or requirements.txt as they are not imported anywhere.")
+        print("  " + t("hint.dependency.remove"))
 
     if not has_issues:
         if not args.quiet:
@@ -229,10 +219,10 @@ def check_dependency(args: argparse.Namespace) -> int:
 def check_cycles(args: argparse.Namespace) -> int:
     """執行循環引用檢查."""
     project_path = os.getcwd()
-    ruff_config = get_ruff_config_from_pyproject(project_path)
-    ignore_dirs = set(ruff_config["exclude_dirs"])
-    ignore_files = set(ruff_config["exclude_files"])
-    src_dirs = ruff_config["src"]
+    cfg = load(project_path)
+    ignore_dirs = cfg.exclude_dirs
+    ignore_files = cfg.exclude_files
+    src_dirs = list(cfg.src_dirs)
 
     if not args.quiet:
         print(t("cycles.checking"))
@@ -250,9 +240,7 @@ def check_cycles(args: argparse.Namespace) -> int:
         for i, cycle in enumerate(cycles, 1):
             rel_cycle = [safe_relpath(fp, project_path) for fp in cycle]
             print(f"  {i}. {' -> '.join(rel_cycle)}")
-        print(
-            "  Hint: Import cycles usually happen when two modules depend on each other. Consider extracting the shared logic into a third module, or move the import statement inside a function/method to defer evaluation."
-        )
+        print("  " + t("hint.cycles"))
         return 1
 
     if not args.quiet:
@@ -260,86 +248,77 @@ def check_cycles(args: argparse.Namespace) -> int:
     return 0
 
 
-def check_signature(args: argparse.Namespace) -> int:
+def check_signature(args: argparse.Namespace, *, corpus: Corpus | None = None) -> int:
     """執行跨檔案本地簽章驗證."""
     project_path = os.getcwd()
-    ruff_config = get_ruff_config_from_pyproject(project_path)
-    ignore_dirs = set(ruff_config["exclude_dirs"])
-    src_dirs = ruff_config["src"]
-    python_files = find_python_files(project_path, exclude_dirs=list(ignore_dirs))
+    cfg = load(project_path)
+    ignore_dirs = cfg.exclude_dirs
+    src_dirs = list(cfg.src_dirs)
+    # 語料注入時掃描器只吃 corpus,這份清單用不到,別白走一次檔案樹
+    python_files = [] if corpus is not None else find_python_files(project_path, exclude_dirs=list(ignore_dirs))
 
     if not args.quiet:
         print(t("signature.checking"))
 
-    errors = check_signatures(python_files, project_path, src_dirs)
+    errors = check_signatures(python_files, project_path, src_dirs, corpus=corpus)
 
     if errors:
         print(t("signature.found", len(errors)))
-        for err in errors:
-            rel_file = safe_relpath(err["file"], project_path)
-            print(f"  - {rel_file}:{err['line']} -> {err['func']} ({err['reason']})")
-        return 1
-
-    if not args.quiet:
-        print(t("signature.success"))
-    return 0
+        for line in render_findings(errors, project_path):
+            print(line)
+    # exit code 由 severity 決定 (error -> 1),不由「有沒有輸出」決定
+    return 1 if has_errors(errors) else 0
 
 
-def check_side_effects(args: argparse.Namespace) -> int:
+def check_side_effects(args: argparse.Namespace, *, corpus: Corpus | None = None) -> int:
     """執行全局副作用檢查 (僅警告)."""
     project_path = os.getcwd()
-    ruff_config = get_ruff_config_from_pyproject(project_path)
-    ignore_dirs = set(ruff_config["exclude_dirs"])
-    check_test_purity = ruff_config.get("check_test_purity", False)
-    python_files = find_python_files(project_path, exclude_dirs=list(ignore_dirs))
+    cfg = load(project_path)
+    ignore_dirs = cfg.exclude_dirs
+    check_test_purity = cfg.check_test_purity
+    # 語料注入時掃描器只吃 corpus,這份清單用不到,別白走一次檔案樹
+    python_files = [] if corpus is not None else find_python_files(project_path, exclude_dirs=list(ignore_dirs))
 
     if not args.quiet:
         print(t("side_effects.checking"))
 
-    warnings = detect_side_effects(python_files, check_test_purity)
+    warnings = detect_side_effects(python_files, check_test_purity, corpus=corpus)
 
     if warnings:
         print(t("side_effects.found", len(warnings)))
-        for w in warnings:
-            rel_file = safe_relpath(w["file"], project_path)
-            print(f"  - {rel_file}:{w['line']} -> {w['call']} ({w['reason']})")
-        print(
-            "  Hint: Move top-level IO/Thread operations inside a function or a block like `if __name__ == '__main__':` to prevent slowing down module loading or polluting the global state."
-        )
-        # 僅警告，不回傳錯誤碼
-        return 0
+        for line in render_findings(warnings, project_path):
+            print(line)
+        print("  " + t("hint.side_effects"))
 
     if not args.quiet:
         print(t("side_effects.success"))
-    return 0
+    # 目前全是 warning -> exit 0;未來若出現 error 級 Finding,exit code 自動跟上
+    return 1 if has_errors(warnings) else 0
 
 
-def check_deadcode(args: argparse.Namespace) -> int:
+def check_deadcode(args: argparse.Namespace, *, corpus: Corpus | None = None) -> int:
     """執行死代碼掃描 (僅警告)."""
     project_path = os.getcwd()
-    ruff_config = get_ruff_config_from_pyproject(project_path)
-    ignore_dirs = set(ruff_config["exclude_dirs"])
-    python_files = find_python_files(project_path, exclude_dirs=list(ignore_dirs))
+    cfg = load(project_path)
+    ignore_dirs = cfg.exclude_dirs
+    # 語料注入時掃描器只吃 corpus,這份清單用不到,別白走一次檔案樹
+    python_files = [] if corpus is not None else find_python_files(project_path, exclude_dirs=list(ignore_dirs))
 
     if not args.quiet:
         print(t("deadcode.checking"))
 
-    warnings = scan_dead_code(python_files)
+    warnings = scan_dead_code(python_files, corpus=corpus)
 
     if warnings:
         print(t("deadcode.found", len(warnings)))
-        for w in warnings:
-            rel_file = safe_relpath(w["file"], project_path)
-            print(f"  - {w['name']} (in {rel_file}:{w['line']})")
-        print(
-            "  Hint: These functions or classes are defined but never called across the entire project. Consider removing them to simplify the codebase, unless they are public APIs meant for external use (in which case, add them to `__all__`)."
-        )
-        # 僅警告，不回傳錯誤碼
-        return 0
+        for line in render_findings(warnings, project_path):
+            print(line)
+        print("  " + t("hint.deadcode"))
 
     if not args.quiet:
         print(t("deadcode.success"))
-    return 0
+    # 目前全是 warning -> exit 0;未來若出現 error 級 Finding,exit code 自動跟上
+    return 1 if has_errors(warnings) else 0
 
 
 def check_all(args: argparse.Namespace) -> int:
@@ -351,53 +330,36 @@ def check_all(args: argparse.Namespace) -> int:
         print(t("check_all.start"))
         print("=" * 60)
 
-    # 1. 語法檢查
-    if not args.quiet:
-        print(f"\n{t('check_all.syntax_phase')}")
-    if check_syntax(args) != 0:
-        exit_code = 1
-        if args.fail_fast:
-            return exit_code
+    # AST 掃描階段共用一份語料:第一次需要時才載入,三個掃描器只 parse 一次.
+    corpus_box: list[Corpus] = []
 
-    # 2. Import 檢查
-    if not args.quiet:
-        print(f"\n{t('check_all.imports_phase')}")
-    if check_imports(args) != 0:
-        exit_code = 1
-        if args.fail_fast:
-            return exit_code
+    def shared_corpus() -> Corpus:
+        if not corpus_box:
+            root = os.getcwd()
+            root_cfg = load(root)
+            python_files = find_python_files(root, exclude_dirs=list(root_cfg.exclude_dirs))
+            corpus_box.append(Corpus.load(python_files))
+        return corpus_box[0]
 
-    # 3. 依賴健康度檢查
-    if not args.quiet:
-        print(f"\n{t('check_all.dependency_phase')}")
-    if check_dependency(args) != 0:
-        exit_code = 1
-        if args.fail_fast:
-            return exit_code
+    # 階段表: (i18n key, 檢查函式, 是否為 blocking 檢查).
+    # blocking 檢查失敗時,--fail-fast 會立即結束;warning-only 檢查一律跑完.
+    phases: tuple[tuple[str, Callable[[], int], bool], ...] = (
+        ("check_all.syntax_phase", lambda: check_syntax(args), True),
+        ("check_all.imports_phase", lambda: check_imports(args), True),
+        ("check_all.dependency_phase", lambda: check_dependency(args), True),
+        ("check_all.cycles_phase", lambda: check_cycles(args), True),
+        ("check_all.signature_phase", lambda: check_signature(args, corpus=shared_corpus()), True),
+        ("check_all.side_effects_phase", lambda: check_side_effects(args, corpus=shared_corpus()), False),
+        ("check_all.deadcode_phase", lambda: check_deadcode(args, corpus=shared_corpus()), False),
+    )
 
-    # 4. 循環引用檢查
-    if not args.quiet:
-        print(f"\n{t('check_all.cycles_phase')}")
-    if check_cycles(args) != 0:
-        exit_code = 1
-
-    # 5. 跨檔案本地簽章驗證
-    if not args.quiet:
-        print(f"\n{t('check_all.signature_phase')}")
-    if check_signature(args) != 0:
-        exit_code = 1
-        if args.fail_fast:
-            return exit_code
-
-    # 6. 全局副作用檢查 (Warning only)
-    if not args.quiet:
-        print(f"\n{t('check_all.side_effects_phase')}")
-    check_side_effects(args)
-
-    # 7. 死代碼掃描 (Warning only)
-    if not args.quiet:
-        print(f"\n{t('check_all.deadcode_phase')}")
-    check_deadcode(args)
+    for phase_key, phase_fn, blocking in phases:
+        if not args.quiet:
+            print(f"\n{t(phase_key)}")
+        if phase_fn() != 0:
+            exit_code = 1
+            if args.fail_fast and blocking:
+                return exit_code
 
     if not args.quiet:
         print("\n" + "=" * 60)

@@ -32,15 +32,10 @@ def clear_caches():
         # 如果原目錄不存在，切換到專案根目錄
         os.chdir(Path(__file__).parent.parent)
 
-    # 清除 cache
-    from pyci_check.i18n import _find_pyproject_toml, get_locale
-    from pyci_check.imports import find_pyproject_toml, get_ruff_config_from_pyproject, get_venv_from_pyproject
+    # 清除 cache (集中在 pyci_check.config)
+    from pyci_check.config import clear_cache
 
-    _find_pyproject_toml.cache_clear()
-    get_locale.cache_clear()
-    find_pyproject_toml.cache_clear()
-    get_ruff_config_from_pyproject.cache_clear()
-    get_venv_from_pyproject.cache_clear()
+    clear_cache()
 
 
 @pytest.fixture

@@ -11,6 +11,72 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Persistent worker pool for execute mode (multi-worker fan-out)
 - find_spec cache invalidation by dist-info mtime instead of whole sys.path
 
+## [0.3.3] - 2026-08-22
+
+Architecture deepening: four candidates from the design review implemented,
+plus linting and hook fixes from the 0.3.x development line.
+
+### Added
+
+- `pyci_check.config.ProjectConfig` — frozen dataclass centralising all
+  `pyproject.toml` reading: `src_dirs`, `exclude_dirs/files`, `venv`,
+  `language`, and **`declared_deps`** (PEP 621 + Poetry formats).
+  `config.load(project_dir)` walks upward, caches per directory (LRU 128),
+  and replaces six independent reader paths in `imports.py`.
+- `pyci_check.findings.Finding` — frozen dataclass (`file`, `line`,
+  `message`, `severity: Literal["error","warning"]`) plus
+  `render_findings` and `has_errors` helpers.  Dead-code, side-effect, and
+  signature scanners now return `list[Finding]`.
+- `pyci_check.corpus.Corpus` — lazy AST corpus with `Corpus.load` for
+  whole-project parse-once; `iter_trees` generator for streaming per-file
+  reads when corpus injection is not provided.  Fixes 8–12× peak-memory
+  regression on standalone deadcode/side-effects runs.
+- Phase table in `cli.check_all` — `(key, fn, blocking)` tuple replaces
+  the copy-paste chain.  The `cycles` phase now honours `--fail-fast`.
+
+### Changed
+
+- Development pins `ruff>=0.16.3`. 0.16 stabilized `CPY001` and `PLR0917`,
+  which `select = ["ALL"]` then picks up; both are now ignored — the project
+  ships a single LICENSE rather than per-file headers, and `PLR0917` takes the
+  same stance as the already-ignored `PLR0913`.
+- `check_all` AST scanners share one `Corpus`; each wrapper no longer
+  walks the file tree independently (3 redundant walks eliminated).
+- `Finding.severity` now drives wrapper exit codes via
+  `findings.has_errors` (signature errors → 1, side-effect/dead-code
+  warnings → 0; behaviour unchanged, contract now explicitly wired).
+- `find_pyproject_toml` and `get_venv_from_pyproject` in `imports.py` are
+  documented as backwards-compatible aliases to `config.load`.
+
+### Fixed
+
+- Generated git hooks resolve `ruff` and `pyci-check` from the project virtual
+  environment before falling back to `PATH`. A tool taken from `PATH` can be a
+  different version than the project pins, so the hook could reject code that
+  the project's own toolchain accepts. The lookup covers both `bin` and
+  `Scripts` layouts, and a linked worktree without its own venv falls back to
+  the main checkout's. Existing checkouts keep their current hook until
+  `pyci-check install-hooks` is run again.
+- `dependency.get_declared_dependencies` now resolves both pyproject and
+  requirements variants against the config root, not the queried subdirectory.
+- `signature.CallValidator.errors` annotation corrected from `list[dict]` to
+  `list[Finding]`.
+
+### Performance
+
+| Operation | v0.3.2 | v0.3.3 | Δ |
+|---|---|---|---|
+| `check_all` AST corpus (38 files, shared) | 106 ms/round | 58 ms/round | **−45%** |
+| Standalone `deadcode` peak RSS (500 files) | 3.4 MB (batched) | 0.1 MB (streaming) | **−97%** |
+| `check_all` file-tree walks | 4 | 1 | **−75%** |
+
+### Descoped, recorded for future work
+
+- `imports` scanner stays dict-shaped (published PyPI wrappers, distinct
+  execution semantics); conversion to `Finding` deferred.
+- `dependency`/`cycles` phases still re-read source per-phase; full corpus
+  consumption is a future candidate.
+
 ## [0.2.0] - 2026-05-07
 
 This release is a substantial overhaul of the import-checking core, focused on
@@ -282,7 +348,8 @@ leaving "does it import successfully?" to `--i-understand-this-will-execute-code
   - Automated release workflow
   - PyPI publishing support (Trusted Publisher)
 
-[Unreleased]: https://github.com/coseto6125/pyci-check/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/coseto6125/pyci-check/compare/v0.3.3...HEAD
+[0.3.3]: https://github.com/coseto6125/pyci-check/compare/v0.2.0...v0.3.3
 [0.2.0]: https://github.com/coseto6125/pyci-check/compare/v0.1.6...v0.2.0
 [0.1.6]: https://github.com/coseto6125/pyci-check/compare/v0.1.5...v0.1.6
 [0.1.5]: https://github.com/coseto6125/pyci-check/compare/v0.1.4...v0.1.5

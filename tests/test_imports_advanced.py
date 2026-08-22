@@ -161,9 +161,6 @@ class TestImportAdvanced:
 venv = ".venv"
 """)
 
-        # 清除 cache
-        get_venv_from_pyproject.cache_clear()
-
         venv = get_venv_from_pyproject(str(temp_dir))
 
         assert venv == ".venv"
@@ -175,9 +172,6 @@ venv = ".venv"
 [tool.pyci-check]
 language = "en"
 """)
-
-        # 清除 cache
-        get_venv_from_pyproject.cache_clear()
 
         venv = get_venv_from_pyproject(str(temp_dir))
 

@@ -132,4 +132,21 @@ TRANSLATIONS = {
     "syntax.error.file_error": "File Error: {}",
     "syntax.error.unexpected_error": "Unexpected Error: {}",
     "syntax.error.exception": "Exception: {}",
+    # Scanner hints (shared by CLI wrappers and standalone printers)
+    "hint.imports.relative": "Hint：請將此相對 import 改為絕對 import，以專案的 source root 為基準。",
+    "hint.imports.install": "Hint：請確認此模組已安裝在環境中（例如檢查 requirements.txt/pyproject.toml）；若是本地模組，請確認路徑或模組名稱拼寫是否正確。",
+    "hint.dependency.add": "Hint：請將上述套件加入 pyproject.toml 或 requirements.txt。",
+    "hint.dependency.remove": "Hint：上述套件沒有被任何地方 import，請從 pyproject.toml 或 requirements.txt 移除。",
+    "hint.cycles": "Hint：循環引用通常來自兩個模組互相依賴。可將共用邏輯抽到第三個模組，或把 import 移到函式/方法內以延後載入。",
+    "hint.side_effects": "Hint：請把頂層的 IO/Thread 操作移進函式，或包在 `if __name__ == '__main__':` 區塊內，避免拖慢 module 載入或污染全域狀態。",
+    "hint.deadcode": "Hint：這些函式或類別在整個專案內都沒有被呼叫。若非對外的 public API，建議移除以簡化程式碼；若要保留，請加入 `__all__`。",
+    # Signature validation
+    "signature.error.too_many_positional": "位置參數過多：最多 {max_pos} 個，實際傳入 {provided} 個",
+    "signature.error.unknown_keywords": "未預期的關鍵字參數：{names}",
+    "signature.error.missing_positional": "缺少必填的位置參數：至少需要 {min_pos} 個，實際傳入 {total_matched} 個",
+    "signature.error.missing_kwonly": "缺少必填的 keyword-only 參數：{names}",
+    "signature.hint.too_many_positional": "移除多餘的 {extra} 個位置參數；若函式有接受，也可改以關鍵字參數傳入。",
+    "signature.hint.unknown_keywords": "移除或改名無效的關鍵字參數：{names}。請對照函式定義確認參數名稱。",
+    "signature.hint.missing_positional": "補上缺少的 {missing} 個必填位置參數，並對照函式簽章確認內容。",
+    "signature.hint.missing_kwonly": "以下參數必須以關鍵字參數明確傳入（例如 param=value）：{names}。",
 }

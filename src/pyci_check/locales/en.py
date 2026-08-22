@@ -132,4 +132,21 @@ TRANSLATIONS = {
     "syntax.error.file_error": "File Error: {}",
     "syntax.error.unexpected_error": "Unexpected Error: {}",
     "syntax.error.exception": "Exception: {}",
+    # Scanner hints (shared by CLI wrappers and standalone printers)
+    "hint.imports.relative": "Hint: Change this relative import to an absolute import based on your project's source root.",
+    "hint.imports.install": "Hint: Ensure this module is installed in your environment (e.g., check requirements.txt/pyproject.toml). If it is a local module, verify the path or module name spelling.",
+    "hint.dependency.add": "Hint: Add the above packages to pyproject.toml or requirements.txt.",
+    "hint.dependency.remove": "Hint: Remove the above packages from pyproject.toml or requirements.txt as they are not imported anywhere.",
+    "hint.cycles": "Hint: Import cycles usually happen when two modules depend on each other. Consider extracting the shared logic into a third module, or move the import statement inside a function/method to defer evaluation.",
+    "hint.side_effects": "Hint: Move top-level IO/Thread operations inside a function or a block like `if __name__ == '__main__':` to prevent slowing down module loading or polluting the global state.",
+    "hint.deadcode": "Hint: These functions or classes are defined but never called across the entire project. Consider removing them to simplify the codebase, unless they are public APIs meant for external use (in which case, add them to `__all__`).",
+    # Signature validation
+    "signature.error.too_many_positional": "Too many positional arguments: expected at most {max_pos}, got {provided}",
+    "signature.error.unknown_keywords": "Unexpected keyword arguments: {names}",
+    "signature.error.missing_positional": "Missing required positional arguments: expected at least {min_pos}, got {total_matched}",
+    "signature.error.missing_kwonly": "Missing required keyword-only arguments: {names}",
+    "signature.hint.too_many_positional": "Remove the extra {extra} positional argument(s), or convert them to keyword arguments if the function accepts them.",
+    "signature.hint.unknown_keywords": "Remove or rename the invalid keyword argument(s): {names}. Check the function definition for correct parameter names.",
+    "signature.hint.missing_positional": "Supply the missing {missing} required positional argument(s). Review the function signature to see what is missing.",
+    "signature.hint.missing_kwonly": "You must explicitly pass the following arguments as keyword arguments (e.g., param=value): {names}.",
 }

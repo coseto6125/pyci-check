@@ -3,7 +3,7 @@
 import tempfile
 from pathlib import Path
 
-from pyci_check.i18n import _find_pyproject_toml, _normalize_locale, get_locale, t
+from pyci_check.i18n import _normalize_locale, get_locale, t
 
 
 class TestI18n:
@@ -75,61 +75,43 @@ class TestI18n:
                 os.chdir(original_cwd)
 
     def test_find_pyproject_toml_exists(self):
-        """測試尋找存在的 pyproject.toml."""
+        """測試往上層尋找存在的 pyproject.toml."""
+        from pyci_check.config import clear_cache, find_pyproject
+
         with tempfile.TemporaryDirectory() as tmpdir:
-            # 創建 pyproject.toml
-            pyproject_path = Path(tmpdir) / "pyproject.toml"
-            pyproject_path.write_text("[project]\nname = 'test'\n", encoding="utf-8")
+            subdir = Path(tmpdir) / "nested"
+            subdir.mkdir()
+            Path(tmpdir).joinpath("pyproject.toml").write_text("[project]\nname = 'test'\n", encoding="utf-8")
 
-            # 清除 cache
-            _find_pyproject_toml.cache_clear()
-
-            # 切換到臨時目錄
-            import os
-
-            original_cwd = os.getcwd()
+            clear_cache()
             try:
-                os.chdir(tmpdir)
-                result = _find_pyproject_toml()
+                result = find_pyproject(str(subdir))
                 assert result is not None
-                # _find_pyproject_toml() 回傳字串而非 Path
                 assert Path(result).name == "pyproject.toml"
             finally:
-                os.chdir(original_cwd)
-                _find_pyproject_toml.cache_clear()
+                clear_cache()
 
     def test_find_pyproject_toml_not_exists(self):
-        """測試尋找不存在的 pyproject.toml."""
+        """測試找不到 pyproject.toml 時回傳 None (上層若恰好有設定檔則只驗證路徑合理)."""
+        from pyci_check.config import clear_cache, find_pyproject
+
         with tempfile.TemporaryDirectory() as tmpdir:
-            # 清除 cache
-            _find_pyproject_toml.cache_clear()
-
-            import os
-
-            original_cwd = os.getcwd()
+            deep = Path(tmpdir) / "a" / "b"
+            deep.mkdir(parents=True)
+            clear_cache()
             try:
-                os.chdir(tmpdir)
-                result = _find_pyproject_toml()
-                # 可能找到上層的 pyproject.toml 或返回 None
-                assert result is None or Path(result).exists()
+                result = find_pyproject(str(deep))
+                assert result is None or result.endswith("pyproject.toml")
             finally:
-                os.chdir(original_cwd)
-                _find_pyproject_toml.cache_clear()
+                clear_cache()
 
     def test_get_locale_from_pyproject(self):
         """測試從 pyproject.toml 讀取語言設定."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            # 創建 pyproject.toml
-            pyproject_path = Path(tmpdir) / "pyproject.toml"
-            pyproject_content = """
-[tool.pyci-check]
-language = "zh_CN"
-"""
-            pyproject_path.write_text(pyproject_content, encoding="utf-8")
+        from pyci_check.config import clear_cache
 
-            # 清除 cache
-            _find_pyproject_toml.cache_clear()
-            get_locale.cache_clear()
+        with tempfile.TemporaryDirectory() as tmpdir:
+            Path(tmpdir).joinpath("pyproject.toml").write_text('[tool.pyci-check]\nlanguage = "zh_CN"\n', encoding="utf-8")
+            clear_cache()
 
             import os
 
@@ -140,6 +122,4 @@ language = "zh_CN"
                 assert locale == "zh_CN"
             finally:
                 os.chdir(original_cwd)
-                # 恢復 cache
-                _find_pyproject_toml.cache_clear()
-                get_locale.cache_clear()
+                clear_cache()

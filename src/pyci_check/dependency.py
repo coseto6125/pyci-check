@@ -8,44 +8,9 @@
 
 import os
 import re
-import tomllib
 
-from pyci_check.imports import _stdlib_top_levels
-
-
-def parse_pyproject_dependencies(pyproject_path: str) -> set[str]:
-    """從 pyproject.toml 提取依賴包名稱."""
-    deps = set()
-    try:
-        with open(pyproject_path, "rb") as f:
-            data = tomllib.load(f)
-
-        # 標準 [project.dependencies]
-        project = data.get("project", {})
-        deps.update(_extract_names(project.get("dependencies", [])))
-
-        # [project.optional-dependencies]
-        optional = project.get("optional-dependencies", {})
-        for group in optional.values():
-            deps.update(_extract_names(group))
-
-        # Poetry [tool.poetry.dependencies]
-        poetry = data.get("tool", {}).get("poetry", {})
-        poetry_deps = poetry.get("dependencies", {})
-        if isinstance(poetry_deps, dict):
-            # Poetry 字典格式: {"requests": "^2.0.0"}
-            deps.update(poetry_deps.keys())
-
-        poetry_dev_deps = poetry.get("group", {}).get("dev", {}).get("dependencies", {})
-        if isinstance(poetry_dev_deps, dict):
-            deps.update(poetry_dev_deps.keys())
-
-    except (OSError, tomllib.TOMLDecodeError):
-        pass
-
-    # 排除 python 自身
-    deps.discard("python")
-    return {d.lower().replace("_", "-") for d in deps}
+from pyci_check.config import load
+from pyci_check.utils import stdlib_top_levels
 
 
 def parse_requirements_txt(req_path: str) -> set[str]:
@@ -70,28 +35,20 @@ def parse_requirements_txt(req_path: str) -> set[str]:
     return {d.lower().replace("_", "-") for d in deps}
 
 
-def _extract_names(spec_list: list[str]) -> list[str]:
-    """從 PEP 508 規格列表中提取包名."""
-    names = []
-    for spec in spec_list:
-        match = re.match(r"^([a-zA-Z0-9_\-]+)", spec)
-        if match:
-            names.append(match.group(1))
-    return names
-
-
 def get_declared_dependencies(project_dir: str) -> set[str]:
-    """獲取專案宣告的所有依賴 (包名)."""
-    all_deps = set()
+    """
+    獲取專案宣告的所有依賴 (包名).
 
-    # 1. pyproject.toml
-    pyproject = os.path.join(project_dir, "pyproject.toml")
-    if os.path.exists(pyproject):
-        all_deps.update(parse_pyproject_dependencies(pyproject))
+    pyproject 與 requirements 變體都以同一個 config root 為基準:
+    pyproject 的解析 (含往上層搜尋) 走 config.load 的快取結果.
+    """
+    cfg = load(project_dir)
+    all_deps = set(cfg.declared_deps)
 
-    # 2. requirements.txt (及常見變體)
-    for req_file in ["requirements.txt", "requirements-dev.txt", "dev-requirements.txt"]:
-        path = os.path.join(project_dir, req_file)
+    # requirements.txt 及常見變體,與 pyproject 放在同一個 root
+    root = os.path.dirname(cfg.pyproject_path) if cfg.pyproject_path else cfg.project_dir
+    for req_file in ("requirements.txt", "requirements-dev.txt", "dev-requirements.txt"):
+        path = os.path.join(root, req_file)
         if os.path.exists(path):
             all_deps.update(parse_requirements_txt(path))
 
@@ -111,7 +68,7 @@ def find_dependency_issues(project_dir: str, imported_modules: set[str], local_m
         {"phantom": set(), "orphan": set()}
     """
     declared_packages = get_declared_dependencies(project_dir)
-    stdlib = _stdlib_top_levels()
+    stdlib = stdlib_top_levels()
 
     # 獲取模組到包的映射 (需在當前環境執行)
     import importlib.metadata

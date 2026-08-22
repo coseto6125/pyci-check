@@ -10,6 +10,9 @@
 
 import ast
 
+from pyci_check.corpus import Corpus, iter_trees
+from pyci_check.findings import Finding
+
 
 class DefinitionVisitor(ast.NodeVisitor):
     def __init__(self, filepath: str):
@@ -65,15 +68,18 @@ class UsageVisitor(ast.NodeVisitor):
     # 會被上面的方法捕獲。
 
 
-def scan_dead_code(python_files: list[str]) -> list[dict]:
+def scan_dead_code(python_files: list[str], *, corpus: Corpus | None = None) -> list[Finding]:
     """
     掃描專案尋找可能未被呼叫的定義.
+
+    Args:
+        python_files: 要掃描的檔案列表
+        corpus: 共用的已解析語料;提供時以語料為準 (python_files 被忽略),
+            未提供時逐檔串流,不整批持有 AST
 
     Returns:
         包含死代碼資訊的列表
     """
-    from pyci_check.imports import read_file_with_encoding
-
     # name -> list of {file, line}
     all_definitions: dict[str, list[dict]] = {}
     all_exported: set[str] = set()
@@ -82,33 +88,23 @@ def scan_dead_code(python_files: list[str]) -> list[dict]:
     usage_visitor = UsageVisitor()
 
     # Pass 1 & 2: 收集定義與使用
-    for filepath in python_files:
-        code = read_file_with_encoding(filepath)
-        if not code:
-            continue
+    for filepath, tree in iter_trees(python_files, corpus):
+        # 收集定義
+        def_visitor = DefinitionVisitor(filepath)
+        def_visitor.visit(tree)
 
-        try:
-            tree = ast.parse(code)
+        for name, lineno in def_visitor.definitions.items():
+            if name not in all_definitions:
+                all_definitions[name] = []
+            all_definitions[name].append({"file": filepath, "line": lineno})
 
-            # 收集定義
-            def_visitor = DefinitionVisitor(filepath)
-            def_visitor.visit(tree)
+        all_exported.update(def_visitor.exported)
 
-            for name, lineno in def_visitor.definitions.items():
-                if name not in all_definitions:
-                    all_definitions[name] = []
-                all_definitions[name].append({"file": filepath, "line": lineno})
-
-            all_exported.update(def_visitor.exported)
-
-            # 收集使用
-            usage_visitor.visit(tree)
-
-        except SyntaxError:
-            pass
+        # 收集使用
+        usage_visitor.visit(tree)
 
     # 分析結果
-    warnings = []
+    warnings: list[Finding] = []
 
     # 常見的框架鉤子/白名單 (不應被報警)
     whitelist = {
@@ -125,15 +121,17 @@ def scan_dead_code(python_files: list[str]) -> list[dict]:
             continue
 
         # 測試檔案中的定義 (例如 test_foo) 不算死代碼，它們是由測試運行器呼叫的
-        [loc for loc in locations if not loc["file"].endswith("test_" + name + ".py")]
-
         # 簡化判斷：如果一個符號的定義都在 test 檔案裡 (或者開頭是 test_)，略過
         if name.startswith(("test_", "fixture_")):
             continue
 
         if name not in usage_visitor.used_names:
             warnings.extend(
-                {"file": loc["file"], "line": loc["line"], "name": name, "reason": "Definition appears to be unused across the project"}
+                Finding(
+                    file=loc["file"],
+                    line=loc["line"],
+                    message=f"'{name}' is defined but never used across the project",
+                )
                 for loc in locations
             )
 

@@ -19,14 +19,22 @@ import runpy
 import subprocess
 import sys
 import time
-import tomllib
 from argparse import Namespace
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from functools import lru_cache
 
+from pyci_check.config import find_pyproject
+from pyci_check.config import load as load_config
 from pyci_check.i18n import t
-from pyci_check.utils import calculate_optimal_workers, get_exclude_dirs_set, safe_relpath, should_use_thread_pool, walk_python_files
+from pyci_check.utils import (
+    calculate_optimal_workers,
+    get_exclude_dirs_set,
+    safe_relpath,
+    should_use_thread_pool,
+    stdlib_top_levels,
+    walk_python_files,
+)
 
 # 效能優化: 預先定義常數避免重複創建
 SENSITIVE_ENV_PREFIXES = frozenset({"AWS", "SECRET", "TOKEN", "KEY", "PASSWORD"})
@@ -119,129 +127,33 @@ class _FindSpecCache:
             pass
 
 
-@lru_cache(maxsize=1)
 def find_pyproject_toml(project_dir: str) -> str | None:
-    """尋找 pyproject.toml (快取結果)."""
-    pyproject_path = os.path.join(project_dir, "pyproject.toml")
-    if os.path.exists(pyproject_path):
-        return pyproject_path
+    """
+    尋找 pyproject.toml.
 
-    # 往上層尋找
-    current = os.path.abspath(project_dir)
-    while True:
-        parent = os.path.dirname(current)
-        if parent == current:  # 已到根目錄
-            break
-        candidate = os.path.join(parent, "pyproject.toml")
-        if os.path.exists(candidate):
-            return candidate
-        current = parent
-
-    return None
+    向後相容 alias (PyPI 公開 API,勿刪);實作集中在 pyci_check.config.find_pyproject.
+    """
+    return find_pyproject(project_dir)
 
 
-@lru_cache(maxsize=1)
 def get_ruff_config_from_pyproject(project_dir: str) -> dict:
-    """
-    從 pyproject.toml 讀取 ruff 設定.
-
-    合併 [tool.pyci-check] 和 [tool.ruff] 的 exclude 和 extend-exclude 設定.
-
-    合併順序:
-    - [tool.pyci-check].exclude
-    - [tool.pyci-check].extend-exclude
-    - [tool.ruff].exclude
-    - [tool.ruff].extend-exclude
-
-    Returns:
-        dict with keys: src, exclude_dirs, exclude_files
-    """
-    pyproject_path = find_pyproject_toml(project_dir)
-    if not pyproject_path:
-        return {"src": [], "exclude_dirs": [], "exclude_files": [], "check_test_purity": False}
-
-    try:
-        with open(pyproject_path, "rb") as f:
-            data = tomllib.load(f)
-    except (OSError, tomllib.TOMLDecodeError):
-        # 檔案讀取失敗或 TOML 格式錯誤,使用預設設定
-        return {"src": [], "exclude_dirs": [], "exclude_files": [], "check_test_purity": False}
-
-    ruff = data.get("tool", {}).get("ruff", {})
-    pyci_check = data.get("tool", {}).get("pyci-check", {})
-
-    # 讀取 src
-    src = ruff.get("src", [])
-    if isinstance(src, str):
-        src = [src]
-
-    # 讀取 pyci-check 的 exclude + extend-exclude
-    pyci_exclude = pyci_check.get("exclude", [])
-    if isinstance(pyci_exclude, str):
-        pyci_exclude = [pyci_exclude]
-
-    pyci_extend_exclude = pyci_check.get("extend-exclude", [])
-    if isinstance(pyci_extend_exclude, str):
-        pyci_extend_exclude = [pyci_extend_exclude]
-
-    # 讀取 ruff 的 exclude + extend-exclude
-    exclude = ruff.get("exclude", [])
-    if isinstance(exclude, str):
-        exclude = [exclude]
-
-    extend_exclude = ruff.get("extend-exclude", [])
-    if isinstance(extend_exclude, str):
-        extend_exclude = [extend_exclude]
-
-    # 合併去重: pyci-check 的 exclude + extend-exclude + ruff 的 exclude + extend-exclude
-    all_exclude = set(pyci_exclude + pyci_extend_exclude + exclude + extend_exclude)
-
-    # 合併並分類
-    exclude_dirs = []
-    exclude_files = []
-
-    for item in all_exclude:
-        # 移除尾部斜線
-        item = item.rstrip("/")
-        # 判斷是否為檔案（有副檔名）
-        basename = os.path.basename(item)
-        if "." in basename and not item.startswith("."):
-            exclude_files.append(item)
-        else:
-            exclude_dirs.append(item)
-
-    check_test_purity = pyci_check.get("check-test-purity", False)
-
-    return {"src": src, "exclude_dirs": exclude_dirs, "exclude_files": exclude_files, "check_test_purity": check_test_purity}
+    """合併 [tool.pyci-check] 與 [tool.ruff] 的 exclude/src (實作集中在 pyci_check.config)."""
+    cfg = load_config(project_dir)
+    return {
+        "src": list(cfg.src_dirs),
+        "exclude_dirs": list(cfg.exclude_dirs),
+        "exclude_files": list(cfg.exclude_files),
+        "check_test_purity": cfg.check_test_purity,
+    }
 
 
-@lru_cache(maxsize=1)
 def get_venv_from_pyproject(project_dir: str) -> str | None:
     """
-    從 pyproject.toml 讀取虛擬環境設定.
+    讀取 [tool.pyci-check] venv.
 
-    Returns:
-        虛擬環境路徑或 None
+    向後相容 alias (PyPI 公開 API,勿刪);實作集中在 pyci_check.config.load().venv_setting.
     """
-    pyproject_path = find_pyproject_toml(project_dir)
-    if not pyproject_path:
-        return None
-
-    try:
-        with open(pyproject_path, "rb") as f:
-            data = tomllib.load(f)
-    except (OSError, tomllib.TOMLDecodeError):
-        # 檔案讀取失敗或 TOML 格式錯誤
-        return None
-
-    # 讀取 [tool.pyci-check] 中的 venv 設定
-    pyci_check = data.get("tool", {}).get("pyci-check", {})
-    venv = pyci_check.get("venv")
-
-    if venv and isinstance(venv, str):
-        return venv
-
-    return None
+    return load_config(project_dir).venv_setting
 
 
 _OPTIONAL_IMPORT_EXC_NAMES = frozenset({"ImportError", "ModuleNotFoundError", "Exception", "BaseException"})
@@ -569,12 +481,6 @@ def _build_sandbox_env(project_dir: str | None, src_dirs: list[str] | None, venv
 
 
 @lru_cache(maxsize=1)
-def _stdlib_top_levels() -> frozenset[str]:
-    """Stdlib 全部模組名 (3.10+)，比 sys.builtin_module_names 完整 (含純 Python stdlib)."""
-    return frozenset(sys.stdlib_module_names) | frozenset({"__main__", "__future__", "__builtins__"})
-
-
-@lru_cache(maxsize=1)
 def _installed_top_levels() -> frozenset[str]:
     """
     已安裝第三方 top-level 模組名集合.
@@ -742,7 +648,7 @@ def check_module_importable_static(
     top = module.split(".", 1)[0]
 
     # L1: stdlib
-    if top in _stdlib_top_levels():
+    if top in stdlib_top_levels():
         return module, None
 
     # L2: 已安裝第三方 top-level (dotted submodule 需走後續檔案系統深度 probe)
@@ -953,7 +859,7 @@ def print_results(
         for rel_import in all_relative_imports:
             # 錯誤訊息不受 --quiet 影響,總是顯示
             print(t("imports.standalone.relative_warning", rel_import["file"], rel_import["line"], rel_import["statement"]))
-            print("       Hint: Change this relative import to an absolute import based on your project's source root.")
+            print("       " + t("hint.imports.relative"))
 
     if missing_modules:
         has_issues = True
@@ -968,7 +874,7 @@ def print_results(
                 print(t("imports.standalone.statement", import_info["statement"]))
                 print(t("imports.standalone.reason", error_msg))
                 print(
-                    "       Hint: Ensure this module is installed in your environment (e.g., check requirements.txt/pyproject.toml). If it is a local module, verify the path or module name spelling."
+                    "       " + t("hint.imports.install"),
                 )
                 print()
                 total_errors += 1
