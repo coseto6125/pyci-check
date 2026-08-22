@@ -11,6 +11,7 @@
 
 import ast
 
+from pyci_check.corpus import Corpus
 from pyci_check.findings import Finding
 
 
@@ -92,38 +93,35 @@ class SideEffectVisitor(ast.NodeVisitor):
             self.warnings.append(Finding(file=self.filepath, line=lineno, message=f"{call_name} ({reason})"))
 
 
-def detect_side_effects(python_files: list[str], check_test_purity: bool = False) -> list[Finding]:
+def detect_side_effects(
+    python_files: list[str],
+    check_test_purity: bool = False,
+    *,
+    corpus: Corpus | None = None,
+) -> list[Finding]:
     """
     掃描檔案尋找頂層副作用與不純潔的測試.
 
     Args:
         python_files: 要掃描的檔案列表
         check_test_purity: 是否開啟測試純潔度檢查
+        corpus: 共用的已解析語料;未提供時自行載入
 
     Returns:
         掃描結果 (Finding) 的列表
     """
-    from pyci_check.imports import read_file_with_encoding
-
     all_warnings: list[Finding] = []
 
-    for filepath in python_files:
-        code = read_file_with_encoding(filepath)
-        if not code:
-            continue
+    trees = corpus.trees if corpus is not None else Corpus.load(python_files).trees
+    for filepath, tree in trees.items():
+        visitor = SideEffectVisitor(filepath)
 
-        try:
-            tree = ast.parse(code)
-            visitor = SideEffectVisitor(filepath)
+        # 如果沒有開啟測試純潔度檢查，就強制把 is_test_file 設為 False，
+        # 這樣就只會檢查頂層副作用 (scope_depth == 0)
+        if not check_test_purity:
+            visitor.is_test_file = False
 
-            # 如果沒有開啟測試純潔度檢查，就強制把 is_test_file 設為 False，
-            # 這樣就只會檢查頂層副作用 (scope_depth == 0)
-            if not check_test_purity:
-                visitor.is_test_file = False
-
-            visitor.visit(tree)
-            all_warnings.extend(visitor.warnings)
-        except SyntaxError:
-            pass
+        visitor.visit(tree)
+        all_warnings.extend(visitor.warnings)
 
     return all_warnings

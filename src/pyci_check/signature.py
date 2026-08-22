@@ -9,6 +9,7 @@ import ast
 import os
 from dataclasses import dataclass
 
+from pyci_check.corpus import Corpus
 from pyci_check.findings import Finding
 from pyci_check.i18n import t
 
@@ -301,38 +302,42 @@ def _get_module_name(filepath: str, project_dir: str, src_dirs: list[str]) -> st
     return best_mod or os.path.basename(filepath).removesuffix(".py")
 
 
-def check_signatures(python_files: list[str], project_dir: str, src_dirs: list[str]) -> list[Finding]:
+def check_signatures(
+    python_files: list[str],
+    project_dir: str,
+    src_dirs: list[str],
+    *,
+    corpus: Corpus | None = None,
+) -> list[Finding]:
     """
     掃描專案，執行本地簽章驗證.
+
+    Args:
+        python_files: 要掃描的檔案列表
+        project_dir: 專案根目錄
+        src_dirs: source 目錄 (相對於 project_dir)
+        corpus: 共用的已解析語料;未提供時自行載入
 
     Returns:
         簽章錯誤 (Finding) 的列表
     """
-    from pyci_check.imports import read_file_with_encoding
-
     # 1. 收集所有的簽章 (Full Qualified Name -> Signature)
     global_signatures: dict[str, Signature] = {}
-    file_asts = {}
-    file_modules = {}
+    file_asts: dict[str, ast.Module] = {}
+    file_modules: dict[str, str] = {}
 
-    for filepath in python_files:
-        code = read_file_with_encoding(filepath)
-        if not code:
-            continue
-        try:
-            tree = ast.parse(code)
-            mod_name = _get_module_name(filepath, project_dir, src_dirs)
+    trees = corpus.trees if corpus is not None else Corpus.load(python_files).trees
+    for filepath, tree in trees.items():
+        mod_name = _get_module_name(filepath, project_dir, src_dirs)
 
-            collector = DefinitionCollector(mod_name)
-            collector.visit(tree)
+        collector = DefinitionCollector(mod_name)
+        collector.visit(tree)
 
-            for local_name, sig in collector.signatures.items():
-                global_signatures[f"{mod_name}.{local_name}"] = sig
+        for local_name, sig in collector.signatures.items():
+            global_signatures[f"{mod_name}.{local_name}"] = sig
 
-            file_asts[filepath] = tree
-            file_modules[filepath] = mod_name
-        except SyntaxError:
-            pass
+        file_asts[filepath] = tree
+        file_modules[filepath] = mod_name
 
     # 2. 驗證所有檔案
     all_errors: list[Finding] = []

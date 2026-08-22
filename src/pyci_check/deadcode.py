@@ -10,6 +10,7 @@
 
 import ast
 
+from pyci_check.corpus import Corpus
 from pyci_check.findings import Finding
 
 
@@ -67,15 +68,17 @@ class UsageVisitor(ast.NodeVisitor):
     # 會被上面的方法捕獲。
 
 
-def scan_dead_code(python_files: list[str]) -> list[Finding]:
+def scan_dead_code(python_files: list[str], *, corpus: Corpus | None = None) -> list[Finding]:
     """
     掃描專案尋找可能未被呼叫的定義.
+
+    Args:
+        python_files: 要掃描的檔案列表
+        corpus: 共用的已解析語料;未提供時自行載入
 
     Returns:
         包含死代碼資訊的列表
     """
-    from pyci_check.imports import read_file_with_encoding
-
     # name -> list of {file, line}
     all_definitions: dict[str, list[dict]] = {}
     all_exported: set[str] = set()
@@ -84,30 +87,21 @@ def scan_dead_code(python_files: list[str]) -> list[Finding]:
     usage_visitor = UsageVisitor()
 
     # Pass 1 & 2: 收集定義與使用
-    for filepath in python_files:
-        code = read_file_with_encoding(filepath)
-        if not code:
-            continue
+    trees = corpus.trees if corpus is not None else Corpus.load(python_files).trees
+    for filepath, tree in trees.items():
+        # 收集定義
+        def_visitor = DefinitionVisitor(filepath)
+        def_visitor.visit(tree)
 
-        try:
-            tree = ast.parse(code)
+        for name, lineno in def_visitor.definitions.items():
+            if name not in all_definitions:
+                all_definitions[name] = []
+            all_definitions[name].append({"file": filepath, "line": lineno})
 
-            # 收集定義
-            def_visitor = DefinitionVisitor(filepath)
-            def_visitor.visit(tree)
+        all_exported.update(def_visitor.exported)
 
-            for name, lineno in def_visitor.definitions.items():
-                if name not in all_definitions:
-                    all_definitions[name] = []
-                all_definitions[name].append({"file": filepath, "line": lineno})
-
-            all_exported.update(def_visitor.exported)
-
-            # 收集使用
-            usage_visitor.visit(tree)
-
-        except SyntaxError:
-            pass
+        # 收集使用
+        usage_visitor.visit(tree)
 
     # 分析結果
     warnings: list[Finding] = []

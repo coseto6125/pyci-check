@@ -15,6 +15,7 @@ if sys.platform == "win32":
 from typing import TYPE_CHECKING
 
 from pyci_check.config import load, resolve_venv
+from pyci_check.corpus import Corpus
 from pyci_check.cycles import find_import_cycles
 from pyci_check.deadcode import scan_dead_code
 from pyci_check.dependency import find_dependency_issues
@@ -247,7 +248,7 @@ def check_cycles(args: argparse.Namespace) -> int:
     return 0
 
 
-def check_signature(args: argparse.Namespace) -> int:
+def check_signature(args: argparse.Namespace, *, corpus: Corpus | None = None) -> int:
     """執行跨檔案本地簽章驗證."""
     project_path = os.getcwd()
     cfg = load(project_path)
@@ -258,7 +259,7 @@ def check_signature(args: argparse.Namespace) -> int:
     if not args.quiet:
         print(t("signature.checking"))
 
-    errors = check_signatures(python_files, project_path, src_dirs)
+    errors = check_signatures(python_files, project_path, src_dirs, corpus=corpus)
 
     if errors:
         print(t("signature.found", len(errors)))
@@ -271,7 +272,7 @@ def check_signature(args: argparse.Namespace) -> int:
     return 0
 
 
-def check_side_effects(args: argparse.Namespace) -> int:
+def check_side_effects(args: argparse.Namespace, *, corpus: Corpus | None = None) -> int:
     """執行全局副作用檢查 (僅警告)."""
     project_path = os.getcwd()
     cfg = load(project_path)
@@ -282,7 +283,7 @@ def check_side_effects(args: argparse.Namespace) -> int:
     if not args.quiet:
         print(t("side_effects.checking"))
 
-    warnings = detect_side_effects(python_files, check_test_purity)
+    warnings = detect_side_effects(python_files, check_test_purity, corpus=corpus)
 
     if warnings:
         print(t("side_effects.found", len(warnings)))
@@ -297,7 +298,7 @@ def check_side_effects(args: argparse.Namespace) -> int:
     return 0
 
 
-def check_deadcode(args: argparse.Namespace) -> int:
+def check_deadcode(args: argparse.Namespace, *, corpus: Corpus | None = None) -> int:
     """執行死代碼掃描 (僅警告)."""
     project_path = os.getcwd()
     cfg = load(project_path)
@@ -307,7 +308,7 @@ def check_deadcode(args: argparse.Namespace) -> int:
     if not args.quiet:
         print(t("deadcode.checking"))
 
-    warnings = scan_dead_code(python_files)
+    warnings = scan_dead_code(python_files, corpus=corpus)
 
     if warnings:
         print(t("deadcode.found", len(warnings)))
@@ -331,22 +332,33 @@ def check_all(args: argparse.Namespace) -> int:
         print(t("check_all.start"))
         print("=" * 60)
 
+    # AST 掃描階段共用一份語料:第一次需要時才載入,三個掃描器只 parse 一次.
+    corpus_box: list[Corpus] = []
+
+    def shared_corpus() -> Corpus:
+        if not corpus_box:
+            root = os.getcwd()
+            root_cfg = load(root)
+            python_files = find_python_files(root, exclude_dirs=list(root_cfg.exclude_dirs))
+            corpus_box.append(Corpus.load(python_files))
+        return corpus_box[0]
+
     # 階段表: (i18n key, 檢查函式, 是否為 blocking 檢查).
     # blocking 檢查失敗時,--fail-fast 會立即結束;warning-only 檢查一律跑完.
-    phases: tuple[tuple[str, Callable[[argparse.Namespace], int], bool], ...] = (
-        ("check_all.syntax_phase", check_syntax, True),
-        ("check_all.imports_phase", check_imports, True),
-        ("check_all.dependency_phase", check_dependency, True),
-        ("check_all.cycles_phase", check_cycles, True),
-        ("check_all.signature_phase", check_signature, True),
-        ("check_all.side_effects_phase", check_side_effects, False),
-        ("check_all.deadcode_phase", check_deadcode, False),
+    phases: tuple[tuple[str, Callable[[], int], bool], ...] = (
+        ("check_all.syntax_phase", lambda: check_syntax(args), True),
+        ("check_all.imports_phase", lambda: check_imports(args), True),
+        ("check_all.dependency_phase", lambda: check_dependency(args), True),
+        ("check_all.cycles_phase", lambda: check_cycles(args), True),
+        ("check_all.signature_phase", lambda: check_signature(args, corpus=shared_corpus()), True),
+        ("check_all.side_effects_phase", lambda: check_side_effects(args, corpus=shared_corpus()), False),
+        ("check_all.deadcode_phase", lambda: check_deadcode(args, corpus=shared_corpus()), False),
     )
 
     for phase_key, phase_fn, blocking in phases:
         if not args.quiet:
             print(f"\n{t(phase_key)}")
-        if phase_fn(args) != 0:
+        if phase_fn() != 0:
             exit_code = 1
             if args.fail_fast and blocking:
                 return exit_code
