@@ -24,8 +24,7 @@ def find_python_files(directory: str, exclude_dirs: list[str] | None = None) -> 
         Python 檔案路徑列表
     """
     exclude_set = get_exclude_dirs_set() if exclude_dirs is None else frozenset(exclude_dirs)
-    ignore_files = frozenset({"starlette_app.py", "sanic_app.py"})
-    return walk_python_files(directory, exclude_set, ignore_files)
+    return walk_python_files(directory, exclude_set)
 
 
 def check_file_syntax(file_path: str) -> tuple[bool, str]:

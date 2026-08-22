@@ -11,7 +11,7 @@ import re
 import tomllib
 
 from pyci_check.config import find_pyproject
-from pyci_check.imports import _stdlib_top_levels
+from pyci_check.utils import stdlib_top_levels
 
 
 def parse_pyproject_dependencies(pyproject_path: str) -> set[str]:
@@ -112,7 +112,7 @@ def find_dependency_issues(project_dir: str, imported_modules: set[str], local_m
         {"phantom": set(), "orphan": set()}
     """
     declared_packages = get_declared_dependencies(project_dir)
-    stdlib = _stdlib_top_levels()
+    stdlib = stdlib_top_levels()
 
     # 獲取模組到包的映射 (需在當前環境執行)
     import importlib.metadata

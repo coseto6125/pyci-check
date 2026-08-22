@@ -27,7 +27,14 @@ from functools import lru_cache
 from pyci_check.config import find_pyproject
 from pyci_check.config import load as load_config
 from pyci_check.i18n import t
-from pyci_check.utils import calculate_optimal_workers, get_exclude_dirs_set, safe_relpath, should_use_thread_pool, walk_python_files
+from pyci_check.utils import (
+    calculate_optimal_workers,
+    get_exclude_dirs_set,
+    safe_relpath,
+    should_use_thread_pool,
+    stdlib_top_levels,
+    walk_python_files,
+)
 
 # 效能優化: 預先定義常數避免重複創建
 SENSITIVE_ENV_PREFIXES = frozenset({"AWS", "SECRET", "TOKEN", "KEY", "PASSWORD"})
@@ -466,12 +473,6 @@ def _build_sandbox_env(project_dir: str | None, src_dirs: list[str] | None, venv
 
 
 @lru_cache(maxsize=1)
-def _stdlib_top_levels() -> frozenset[str]:
-    """Stdlib 全部模組名 (3.10+)，比 sys.builtin_module_names 完整 (含純 Python stdlib)."""
-    return frozenset(sys.stdlib_module_names) | frozenset({"__main__", "__future__", "__builtins__"})
-
-
-@lru_cache(maxsize=1)
 def _installed_top_levels() -> frozenset[str]:
     """
     已安裝第三方 top-level 模組名集合.
@@ -639,7 +640,7 @@ def check_module_importable_static(
     top = module.split(".", 1)[0]
 
     # L1: stdlib
-    if top in _stdlib_top_levels():
+    if top in stdlib_top_levels():
         return module, None
 
     # L2: 已安裝第三方 top-level (dotted submodule 需走後續檔案系統深度 probe)

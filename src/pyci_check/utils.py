@@ -5,7 +5,6 @@ import os
 import sys
 import sysconfig
 from functools import lru_cache
-from pathlib import Path
 
 
 # Free-threaded build 偵測 (PEP 703, **Python 3.13t / 3.14t / ...** — 必須是含 't' 後綴的 build)。
@@ -16,6 +15,12 @@ from pathlib import Path
 # 注意: 一般 3.13/3.14/3.15 等非 't' 後綴的 build 仍有 GIL,此值為 False。
 # True 時 ThreadPoolExecutor 為真並行 (CPU-bound 工作自動受益);
 # False 時 ThreadPool 只對 I/O / subprocess 有用。
+@lru_cache(maxsize=1)
+def stdlib_top_levels() -> frozenset[str]:
+    """Stdlib 全部模組名 (3.10+)，比 sys.builtin_module_names 完整 (含純 Python stdlib)."""
+    return frozenset(sys.stdlib_module_names) | frozenset({"__main__", "__future__", "__builtins__"})
+
+
 def _is_free_threaded_build() -> bool:
     """回傳目前 interpreter 是否為 free-threaded build."""
     return sys.version_info >= (3, 13) and str(sysconfig.get_config_var("Py_GIL_DISABLED")) == "1"
@@ -81,25 +86,6 @@ def get_exclude_dirs_set() -> frozenset[str]:
             "*.egg-info",
         }
     )
-
-
-def should_exclude_path(file_path: str, exclude_dirs: frozenset[str]) -> bool:
-    """
-    判斷路徑是否應被排除 (任一層目錄符合 exclude_dirs 模式).
-
-    Args:
-        file_path: 檔案路徑
-        exclude_dirs: 排除目錄集合 (支援萬用字元如 *.egg-info)
-
-    Returns:
-        True 如果應排除
-    """
-    path_parts = Path(file_path).parts
-    for part in path_parts:
-        for pattern in exclude_dirs:
-            if fnmatch.fnmatch(part, pattern):
-                return True
-    return False
 
 
 def walk_python_files(
