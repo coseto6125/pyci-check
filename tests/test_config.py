@@ -183,3 +183,25 @@ def test_load_declared_deps_default_empty_without_pyproject(tmp_path):
     """沒有 pyproject 時 declared_deps 為空,其餘欄位照常給預設值."""
     cfg = load(str(tmp_path))
     assert cfg.declared_deps == ()
+
+
+class TestMalformedPyproject:
+    """畸形 pyproject.toml 不得讓 load 崩潰 (契約:壞檔案 -> 空設定)."""
+
+    @pytest.mark.parametrize(
+        "content",
+        [
+            pytest.param("tool = 5\n", id="tool-non-table"),
+            pytest.param("project = 7\n", id="project-non-table"),
+            pytest.param('[tool]\nruff = "not-a-table"\n', id="ruff-non-table"),
+            pytest.param("[tool.poetry]\ngroup = 1\n", id="poetry-group-non-table"),
+            pytest.param("[tool.pyci-check]\nexclude = 42\n", id="exclude-non-list"),
+        ],
+    )
+    def test_load_survives_malformed_sections(self, content):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            _write_pyproject(tmpdir, content)
+            clear_cache()
+            cfg = load(tmpdir)
+            assert cfg.declared_deps == ()
+            assert cfg.exclude_dirs == frozenset()

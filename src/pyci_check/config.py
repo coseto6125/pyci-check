@@ -57,6 +57,16 @@ def _as_str_list(value: object) -> list[str]:
     return []
 
 
+def _table(data: dict, *keys: str) -> dict:
+    """沿鍵路徑取子表格;任一層不是 dict 就回傳空 dict (畸形設定不崩潰)."""
+    current: object = data
+    for key in keys:
+        if not isinstance(current, dict):
+            return {}
+        current = current.get(key)
+    return current if isinstance(current, dict) else {}
+
+
 def _extract_dep_names(spec_list: list[str]) -> list[str]:
     """從 PEP 508 規格列表中提取包名."""
     names = []
@@ -70,19 +80,14 @@ def _extract_dep_names(spec_list: list[str]) -> list[str]:
 def _declared_deps_from(data: dict) -> tuple[str, ...]:
     """從已解析的 pyproject 資料提取宣告依賴;python 自身排除,名稱正規化."""
     deps: set[str] = set()
-    project = data.get("project", {})
+    project = _table(data, "project")
     deps.update(_extract_dep_names(project.get("dependencies", [])))
-    optional = project.get("optional-dependencies", {})
-    if isinstance(optional, dict):
-        for group in optional.values():
-            deps.update(_extract_dep_names(group))
+    for group in _table(project, "optional-dependencies").values():
+        deps.update(_extract_dep_names(group))
 
-    poetry = data.get("tool", {}).get("poetry", {}).get("dependencies", {})
-    if isinstance(poetry, dict):
-        deps.update(poetry.keys())
-    poetry_dev = data.get("tool", {}).get("poetry", {}).get("group", {}).get("dev", {}).get("dependencies", {})
-    if isinstance(poetry_dev, dict):
-        deps.update(poetry_dev.keys())
+    # Poetry 兩種佈局:[tool.poetry.dependencies] 與 [tool.poetry.group.dev.dependencies]
+    deps.update(_table(data, "tool", "poetry", "dependencies").keys())
+    deps.update(_table(data, "tool", "poetry", "group", "dev", "dependencies").keys())
 
     deps.discard("python")
     return tuple(sorted(d.lower().replace("_", "-") for d in deps))
@@ -115,8 +120,8 @@ def load(project_dir: str = ".") -> ProjectConfig:
         except (OSError, tomllib.TOMLDecodeError):
             data = {}
 
-    ruff = data.get("tool", {}).get("ruff", {})
-    pyci_check = data.get("tool", {}).get("pyci-check", {})
+    ruff = _table(data, "tool", "ruff")
+    pyci_check = _table(data, "tool", "pyci-check")
 
     exclude_items: set[str] = set()
     exclude_items.update(_as_str_list(pyci_check.get("exclude")))
@@ -136,7 +141,7 @@ def load(project_dir: str = ".") -> ProjectConfig:
         exclude_files=exclude_files,
         check_test_purity=bool(pyci_check.get("check-test-purity", False)),
         venv_setting=venv_setting if isinstance(venv_setting, str) and venv_setting else None,
-        language=language if isinstance(language, str) and language.strip() else "en",
+        language=language.strip() if isinstance(language, str) and language.strip() else "en",
         declared_deps=_declared_deps_from(data),
     )
 

@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- `config.load` no longer crashes with `AttributeError` on a malformed
+  `pyproject.toml` where `[tool]` / `project` / Poetry sections hold
+  non-table values (e.g. `tool = 5`). Malformed sections now read as empty
+  settings, matching the documented bad-file contract.
+- Side-effect scanning hoists the dangerous-call table to a module constant
+  and moves `import os` out of the per-file visitor constructor (~8% faster
+  on a 400-file synthetic corpus, identical output).
+
 ### Planned
 - Persistent worker pool for execute mode (multi-worker fan-out)
 - find_spec cache invalidation by dist-info mtime instead of whole sys.path

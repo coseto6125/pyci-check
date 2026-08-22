@@ -10,9 +10,28 @@
 """
 
 import ast
+import os
 
 from pyci_check.corpus import Corpus, iter_trees
 from pyci_check.findings import Finding
+
+# 危險呼叫名單 (模組層常數;原實作在每個 Call 節點重建)
+_DANGEROUS_CALLS = {
+    # 執行緒與進程
+    "Thread": "Thread/Process creation",
+    "threading.Thread": "Thread/Process creation",
+    "Process": "Thread/Process creation",
+    "multiprocessing.Process": "Thread/Process creation",
+    # 常見網路請求
+    "requests.get": "Network request",
+    "requests.post": "Network request",
+    "requests.request": "Network request",
+    "urlopen": "Network request",
+    "urllib.request.urlopen": "Network request",
+    "socket.socket": "Socket creation",
+    "httpx.get": "Network request",
+    "httpx.post": "Network request",
+}
 
 
 class SideEffectVisitor(ast.NodeVisitor):
@@ -22,8 +41,6 @@ class SideEffectVisitor(ast.NodeVisitor):
 
         # 追蹤作用域深度，只有 depth == 0 才是 top-level
         self.scope_depth = 0
-
-        import os
 
         filename = os.path.basename(filepath)
         # 判斷是否為測試檔案
@@ -67,26 +84,8 @@ class SideEffectVisitor(ast.NodeVisitor):
         return ""
 
     def _check_dangerous_call(self, call_name: str, lineno: int):
-        # 定義危險名單
-        dangerous = {
-            # 執行緒與進程
-            "Thread": "Thread/Process creation",
-            "threading.Thread": "Thread/Process creation",
-            "Process": "Thread/Process creation",
-            "multiprocessing.Process": "Thread/Process creation",
-            # 常見網路請求
-            "requests.get": "Network request",
-            "requests.post": "Network request",
-            "requests.request": "Network request",
-            "urlopen": "Network request",
-            "urllib.request.urlopen": "Network request",
-            "socket.socket": "Socket creation",
-            "httpx.get": "Network request",
-            "httpx.post": "Network request",
-        }
-
-        if call_name in dangerous:
-            reason_base = dangerous[call_name]
+        if call_name in _DANGEROUS_CALLS:
+            reason_base = _DANGEROUS_CALLS[call_name]
 
             reason = f"Top-level {reason_base.lower()}" if self.scope_depth == 0 else f"Impure test: {reason_base.lower()} detected"
 
