@@ -67,3 +67,62 @@ def main():
     dead_msgs = [f.message for f in warnings]
     assert len(dead_msgs) == 1
     assert "'unused_func'" in dead_msgs[0]
+
+
+def test_scan_dead_code_without_corpus_streams(monkeypatch, tmp_path):
+    """Standalone 呼叫不得整批建 Corpus (記憶體退步防護網):fallback 必須逐檔串流."""
+    from pyci_check import corpus as corpus_mod
+
+    target = tmp_path / "mod.py"
+    target.write_text("def unused_fn():\n    pass\n", encoding="utf-8")
+
+    def _boom(_cls, _files):
+        raise AssertionError("corpus=None 的 fallback 必須逐檔串流,不得呼叫 Corpus.load")
+
+    monkeypatch.setattr(corpus_mod.Corpus, "load", classmethod(_boom))
+    findings = scan_dead_code([str(target)])
+    assert len(findings) == 1
+
+
+def test_detect_side_effects_without_corpus_streams(monkeypatch, tmp_path):
+    """同上,副作用掃描的 fallback 也必須串流."""
+    from pyci_check import corpus as corpus_mod
+
+    target = tmp_path / "danger.py"
+    target.write_text("import requests\nresponse = requests.get('http://example.com')\n", encoding="utf-8")
+
+    def _boom(_cls, _files):
+        raise AssertionError("corpus=None 的 fallback 必須逐檔串流,不得呼叫 Corpus.load")
+
+    monkeypatch.setattr(corpus_mod.Corpus, "load", classmethod(_boom))
+    warnings = detect_side_effects([str(target)])
+    assert len(warnings) == 1
+
+
+def test_iter_trees_prefers_corpus_and_ignores_python_files(tmp_path):
+    """Corpus 提供時以語料為準;python_files 只是 standalone 用途的參數."""
+    from pyci_check.corpus import Corpus, iter_trees
+
+    a = tmp_path / "a.py"
+    b = tmp_path / "b.py"
+    a.write_text("x = 1\n", encoding="utf-8")
+    b.write_text("y = 2\n", encoding="utf-8")
+
+    full = Corpus.load([str(a), str(b)])
+    pairs = dict(iter_trees([str(a)], corpus=full))  # 只傳一個檔案也會掃到兩個
+    assert set(pairs) == {str(a), str(b)}
+
+
+def test_iter_trees_streams_valid_files_and_skips_broken(tmp_path):
+    """Standalone 模式逐檔 yield 已解析的樹;讀不到或語法錯誤的靜默略過."""
+    from pyci_check.corpus import iter_trees
+
+    good = tmp_path / "good.py"
+    bad = tmp_path / "bad.py"
+    good.write_text("x = 1\n", encoding="utf-8")
+    bad.write_text("def broken(:\n", encoding="utf-8")
+    missing = str(tmp_path / "missing.py")
+
+    pairs = dict(iter_trees([str(good), str(bad), missing]))
+    assert list(pairs) == [str(good)]
+    assert isinstance(pairs[str(good)], __import__("ast").Module)

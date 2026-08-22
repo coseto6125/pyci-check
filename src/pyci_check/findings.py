@@ -6,6 +6,7 @@
 """
 
 from dataclasses import dataclass
+from typing import Literal
 
 from pyci_check.utils import safe_relpath
 
@@ -19,13 +20,18 @@ class Finding:
         file: 檔案路徑 (掃描時的路徑原樣保留)
         line: 行號
         message: 完整原因描述;可含換行以呈現多行細節
-        severity: "error" (影響 exit code) 或 "warning" (僅提示)
+        severity: "error" 使 wrapper 回傳非零 exit code;"warning" 僅提示
     """
 
     file: str
     line: int
     message: str
-    severity: str = "warning"
+    severity: Literal["error", "warning"] = "warning"
+
+
+def has_errors(findings: list[Finding]) -> bool:
+    """是否存在 severity="error" 的發現;wrapper 的 exit code 由這裡決定."""
+    return any(f.severity == "error" for f in findings)
 
 
 def render_findings(findings: list[Finding], project_dir: str) -> list[str]:

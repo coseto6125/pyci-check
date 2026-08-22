@@ -7,6 +7,7 @@
 
 import ast
 import contextlib
+from collections.abc import Iterator
 from dataclasses import dataclass, field
 
 from pyci_check.imports import read_file_with_encoding
@@ -26,11 +27,26 @@ class Corpus:
     @classmethod
     def load(cls, python_files: list[str]) -> "Corpus":
         """讀取並 parse 檔案清單;失敗的檔案靜默略過 (與各掃描器原本的行為一致)."""
-        trees: dict[str, ast.Module] = {}
-        for filepath in python_files:
-            code = read_file_with_encoding(filepath)
-            if not code:
-                continue
-            with contextlib.suppress(SyntaxError):
-                trees[filepath] = ast.parse(code)
-        return cls(trees)
+        return cls(dict(iter_trees(python_files)))
+
+
+def iter_trees(
+    python_files: list[str],
+    corpus: "Corpus | None" = None,
+) -> Iterator[tuple[str, ast.Module]]:
+    """
+    逐檔供應 (filepath, tree).
+
+    corpus 提供時以語料為準,python_files 被忽略 (優先序集中在這裡);
+    未提供時逐檔讀取-parse-yield,記憶體不同時持有全專案的 AST.
+    讀取失敗或語法錯誤的檔案靜默略過.
+    """
+    if corpus is not None:
+        yield from corpus.trees.items()
+        return
+    for filepath in python_files:
+        code = read_file_with_encoding(filepath)
+        if not code:
+            continue
+        with contextlib.suppress(SyntaxError):
+            yield filepath, ast.parse(code)

@@ -156,7 +156,7 @@ class CallValidator(ast.NodeVisitor):
         self.filepath = filepath
         self.module_name = module_name
         self.global_signatures = global_signatures
-        self.errors: list[dict] = []
+        self.errors: list[Finding] = []
 
         # 追蹤檔案內的 import： local_name -> fully_qualified_name
         # e.g., "safe_relpath" -> "pyci_check.utils.safe_relpath"
@@ -326,6 +326,8 @@ def check_signatures(
     file_asts: dict[str, ast.Module] = {}
     file_modules: dict[str, str] = {}
 
+    # 簽章驗證需先收集全專案定義再比對,整批持有 AST 是本質需求 (與 base 相同);
+    # standalone 也走 Corpus,記憶體特性與 13e3e7d 一致
     trees = corpus.trees if corpus is not None else Corpus.load(python_files).trees
     for filepath, tree in trees.items():
         mod_name = _get_module_name(filepath, project_dir, src_dirs)

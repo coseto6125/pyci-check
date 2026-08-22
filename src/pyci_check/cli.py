@@ -19,7 +19,7 @@ from pyci_check.corpus import Corpus
 from pyci_check.cycles import find_import_cycles
 from pyci_check.deadcode import scan_dead_code
 from pyci_check.dependency import find_dependency_issues
-from pyci_check.findings import render_findings
+from pyci_check.findings import has_errors, render_findings
 from pyci_check.git_hook import install_hooks, uninstall_hooks
 from pyci_check.i18n import t
 from pyci_check.imports import check_missing_modules, extract_from_all_files
@@ -254,7 +254,8 @@ def check_signature(args: argparse.Namespace, *, corpus: Corpus | None = None) -
     cfg = load(project_path)
     ignore_dirs = cfg.exclude_dirs
     src_dirs = list(cfg.src_dirs)
-    python_files = find_python_files(project_path, exclude_dirs=list(ignore_dirs))
+    # 語料注入時掃描器只吃 corpus,這份清單用不到,別白走一次檔案樹
+    python_files = [] if corpus is not None else find_python_files(project_path, exclude_dirs=list(ignore_dirs))
 
     if not args.quiet:
         print(t("signature.checking"))
@@ -265,11 +266,8 @@ def check_signature(args: argparse.Namespace, *, corpus: Corpus | None = None) -
         print(t("signature.found", len(errors)))
         for line in render_findings(errors, project_path):
             print(line)
-        return 1
-
-    if not args.quiet:
-        print(t("signature.success"))
-    return 0
+    # exit code 由 severity 決定 (error -> 1),不由「有沒有輸出」決定
+    return 1 if has_errors(errors) else 0
 
 
 def check_side_effects(args: argparse.Namespace, *, corpus: Corpus | None = None) -> int:
@@ -278,7 +276,8 @@ def check_side_effects(args: argparse.Namespace, *, corpus: Corpus | None = None
     cfg = load(project_path)
     ignore_dirs = cfg.exclude_dirs
     check_test_purity = cfg.check_test_purity
-    python_files = find_python_files(project_path, exclude_dirs=list(ignore_dirs))
+    # 語料注入時掃描器只吃 corpus,這份清單用不到,別白走一次檔案樹
+    python_files = [] if corpus is not None else find_python_files(project_path, exclude_dirs=list(ignore_dirs))
 
     if not args.quiet:
         print(t("side_effects.checking"))
@@ -290,12 +289,11 @@ def check_side_effects(args: argparse.Namespace, *, corpus: Corpus | None = None
         for line in render_findings(warnings, project_path):
             print(line)
         print("  " + t("hint.side_effects"))
-        # 僅警告，不回傳錯誤碼
-        return 0
 
     if not args.quiet:
         print(t("side_effects.success"))
-    return 0
+    # 目前全是 warning -> exit 0;未來若出現 error 級 Finding,exit code 自動跟上
+    return 1 if has_errors(warnings) else 0
 
 
 def check_deadcode(args: argparse.Namespace, *, corpus: Corpus | None = None) -> int:
@@ -303,7 +301,8 @@ def check_deadcode(args: argparse.Namespace, *, corpus: Corpus | None = None) ->
     project_path = os.getcwd()
     cfg = load(project_path)
     ignore_dirs = cfg.exclude_dirs
-    python_files = find_python_files(project_path, exclude_dirs=list(ignore_dirs))
+    # 語料注入時掃描器只吃 corpus,這份清單用不到,別白走一次檔案樹
+    python_files = [] if corpus is not None else find_python_files(project_path, exclude_dirs=list(ignore_dirs))
 
     if not args.quiet:
         print(t("deadcode.checking"))
@@ -315,12 +314,11 @@ def check_deadcode(args: argparse.Namespace, *, corpus: Corpus | None = None) ->
         for line in render_findings(warnings, project_path):
             print(line)
         print("  " + t("hint.deadcode"))
-        # 僅警告，不回傳錯誤碼
-        return 0
 
     if not args.quiet:
         print(t("deadcode.success"))
-    return 0
+    # 目前全是 warning -> exit 0;未來若出現 error 級 Finding,exit code 自動跟上
+    return 1 if has_errors(warnings) else 0
 
 
 def check_all(args: argparse.Namespace) -> int:

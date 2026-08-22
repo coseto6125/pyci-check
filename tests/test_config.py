@@ -161,3 +161,25 @@ class TestResolveVenv:
         with tempfile.TemporaryDirectory() as tmpdir:
             _write_pyproject(tmpdir, self._cfg_with(None))
             assert resolve_venv(None, load(tmpdir)) is None
+
+
+def test_load_parses_declared_deps_mixed_formats(tmp_path):
+    """PEP 508 與 Poetry 格式的依賴都進 declared_deps,python 自身排除."""
+    (tmp_path / "pyproject.toml").write_text(
+        """
+[project]
+dependencies = ["Flask>=3.0", "some_pkg"]
+
+[tool.poetry.dependencies]
+python = "^3.11"
+httpx = "*"
+""",
+        encoding="utf-8",
+    )
+    assert load(str(tmp_path)).declared_deps == ("flask", "httpx", "some-pkg")
+
+
+def test_load_declared_deps_default_empty_without_pyproject(tmp_path):
+    """沒有 pyproject 時 declared_deps 為空,其餘欄位照常給預設值."""
+    cfg = load(str(tmp_path))
+    assert cfg.declared_deps == ()

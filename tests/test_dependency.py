@@ -1,12 +1,12 @@
 """測試依賴健康度檢查."""
 
-from pyci_check.dependency import find_dependency_issues, get_declared_dependencies, parse_pyproject_dependencies, parse_requirements_txt
+from pyci_check.config import load
+from pyci_check.dependency import find_dependency_issues, get_declared_dependencies, parse_requirements_txt
 
 
-def test_parse_pyproject_dependencies(tmp_path):
+def test_load_parses_declared_deps_pep621(tmp_path):
     """測試解析標準 PEP 621 格式的 pyproject.toml"""
-    pyproject = tmp_path / "pyproject.toml"
-    pyproject.write_text(
+    (tmp_path / "pyproject.toml").write_text(
         """
 [project]
 dependencies = [
@@ -20,14 +20,12 @@ dev = ["pytest"]
         encoding="utf-8",
     )
 
-    deps = parse_pyproject_dependencies(str(pyproject))
-    assert deps == {"requests", "numpy", "pytest"}
+    assert load(str(tmp_path)).declared_deps == ("numpy", "pytest", "requests")
 
 
-def test_parse_pyproject_poetry(tmp_path):
+def test_load_parses_declared_deps_poetry(tmp_path):
     """測試解析 Poetry 格式的 pyproject.toml"""
-    pyproject = tmp_path / "pyproject.toml"
-    pyproject.write_text(
+    (tmp_path / "pyproject.toml").write_text(
         """
 [tool.poetry.dependencies]
 python = "^3.11"
@@ -39,18 +37,31 @@ pytest-cov = "^4.0.0"
         encoding="utf-8",
     )
 
-    deps = parse_pyproject_dependencies(str(pyproject))
     # python 應該被排除
-    assert deps == {"fastapi", "pytest-cov"}
+    assert load(str(tmp_path)).declared_deps == ("fastapi", "pytest-cov")
 
 
-def test_parse_empty_or_missing_pyproject(tmp_path):
+def test_load_declared_deps_empty_when_no_or_broken_pyproject(tmp_path):
     """測試缺少檔案或空檔案的容錯"""
-    assert parse_pyproject_dependencies(str(tmp_path / "not_exist.toml")) == set()
+    assert load(str(tmp_path)).declared_deps == ()
 
-    empty_toml = tmp_path / "empty.toml"
-    empty_toml.write_text("", encoding="utf-8")
-    assert parse_pyproject_dependencies(str(empty_toml)) == set()
+    (tmp_path / "empty.toml").write_text("", encoding="utf-8")
+    assert load(str(tmp_path / "subdir_does_not_exist")).declared_deps == ()
+
+
+def test_get_declared_dependencies_resolves_both_sources_at_config_root(tmp_path):
+    """Pyproject 往上層找到 root 時,requirements 變體也以同一個 root 為基準."""
+    parent = tmp_path / "parent"
+    sub = parent / "sub"
+    sub.mkdir(parents=True)
+    (parent / "pyproject.toml").write_text(
+        '[project]\nname = "p"\ndependencies = ["flask"]\n',
+        encoding="utf-8",
+    )
+    (parent / "requirements-dev.txt").write_text("gunicorn\n", encoding="utf-8")
+
+    deps = get_declared_dependencies(str(sub))
+    assert deps == {"flask", "gunicorn"}
 
 
 def test_parse_requirements_txt(tmp_path):

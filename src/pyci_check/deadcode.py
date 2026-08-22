@@ -10,7 +10,7 @@
 
 import ast
 
-from pyci_check.corpus import Corpus
+from pyci_check.corpus import Corpus, iter_trees
 from pyci_check.findings import Finding
 
 
@@ -74,7 +74,8 @@ def scan_dead_code(python_files: list[str], *, corpus: Corpus | None = None) -> 
 
     Args:
         python_files: 要掃描的檔案列表
-        corpus: 共用的已解析語料;未提供時自行載入
+        corpus: 共用的已解析語料;提供時以語料為準 (python_files 被忽略),
+            未提供時逐檔串流,不整批持有 AST
 
     Returns:
         包含死代碼資訊的列表
@@ -87,8 +88,7 @@ def scan_dead_code(python_files: list[str], *, corpus: Corpus | None = None) -> 
     usage_visitor = UsageVisitor()
 
     # Pass 1 & 2: 收集定義與使用
-    trees = corpus.trees if corpus is not None else Corpus.load(python_files).trees
-    for filepath, tree in trees.items():
+    for filepath, tree in iter_trees(python_files, corpus):
         # 收集定義
         def_visitor = DefinitionVisitor(filepath)
         def_visitor.visit(tree)

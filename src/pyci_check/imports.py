@@ -128,7 +128,11 @@ class _FindSpecCache:
 
 
 def find_pyproject_toml(project_dir: str) -> str | None:
-    """尋找 pyproject.toml (實作集中在 pyci_check.config)."""
+    """
+    尋找 pyproject.toml.
+
+    向後相容 alias (PyPI 公開 API,勿刪);實作集中在 pyci_check.config.find_pyproject.
+    """
     return find_pyproject(project_dir)
 
 
@@ -144,7 +148,11 @@ def get_ruff_config_from_pyproject(project_dir: str) -> dict:
 
 
 def get_venv_from_pyproject(project_dir: str) -> str | None:
-    """讀取 [tool.pyci-check] venv (實作集中在 pyci_check.config)."""
+    """
+    讀取 [tool.pyci-check] venv.
+
+    向後相容 alias (PyPI 公開 API,勿刪);實作集中在 pyci_check.config.load().venv_setting.
+    """
     return load_config(project_dir).venv_setting
 
 

@@ -5,11 +5,13 @@
 - 往上層搜尋 pyproject.toml (唯一一份搜尋邏輯)
 - 合併 [tool.pyci-check] 與 [tool.ruff] 的 exclude / extend-exclude / src
 - 解析 venv、language、check-test-purity
+- 提取宣告依賴 (PEP 621 與 Poetry 兩種格式) 成 declared_deps
 
 快取屬於 implementation 細節,caller 不需知道;測試需要隔離時呼叫 clear_cache().
 """
 
 import os
+import re
 import tomllib
 from dataclasses import dataclass
 from functools import lru_cache
@@ -27,6 +29,8 @@ class ProjectConfig:
     check_test_purity: bool
     venv_setting: str | None
     language: str
+    # 宣告依賴 (已正規化小寫、底線轉橫線);空專案/壞檔案時為空
+    declared_deps: tuple[str, ...] = ()
 
 
 def find_pyproject(project_dir: str) -> str | None:
@@ -51,6 +55,37 @@ def _as_str_list(value: object) -> list[str]:
     if isinstance(value, list):
         return [item for item in value if isinstance(item, str)]
     return []
+
+
+def _extract_dep_names(spec_list: list[str]) -> list[str]:
+    """從 PEP 508 規格列表中提取包名."""
+    names = []
+    for spec in spec_list:
+        match = re.match(r"^([a-zA-Z0-9_\-]+)", spec)
+        if match:
+            names.append(match.group(1))
+    return names
+
+
+def _declared_deps_from(data: dict) -> tuple[str, ...]:
+    """從已解析的 pyproject 資料提取宣告依賴;python 自身排除,名稱正規化."""
+    deps: set[str] = set()
+    project = data.get("project", {})
+    deps.update(_extract_dep_names(project.get("dependencies", [])))
+    optional = project.get("optional-dependencies", {})
+    if isinstance(optional, dict):
+        for group in optional.values():
+            deps.update(_extract_dep_names(group))
+
+    poetry = data.get("tool", {}).get("poetry", {}).get("dependencies", {})
+    if isinstance(poetry, dict):
+        deps.update(poetry.keys())
+    poetry_dev = data.get("tool", {}).get("poetry", {}).get("group", {}).get("dev", {}).get("dependencies", {})
+    if isinstance(poetry_dev, dict):
+        deps.update(poetry_dev.keys())
+
+    deps.discard("python")
+    return tuple(sorted(d.lower().replace("_", "-") for d in deps))
 
 
 def _split_exclude(items: set[str]) -> tuple[frozenset[str], frozenset[str]]:
@@ -102,6 +137,7 @@ def load(project_dir: str = ".") -> ProjectConfig:
         check_test_purity=bool(pyci_check.get("check-test-purity", False)),
         venv_setting=venv_setting if isinstance(venv_setting, str) and venv_setting else None,
         language=language if isinstance(language, str) and language.strip() else "en",
+        declared_deps=_declared_deps_from(data),
     )
 
 

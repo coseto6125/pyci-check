@@ -11,7 +11,7 @@
 
 import ast
 
-from pyci_check.corpus import Corpus
+from pyci_check.corpus import Corpus, iter_trees
 from pyci_check.findings import Finding
 
 
@@ -105,15 +105,15 @@ def detect_side_effects(
     Args:
         python_files: 要掃描的檔案列表
         check_test_purity: 是否開啟測試純潔度檢查
-        corpus: 共用的已解析語料;未提供時自行載入
+        corpus: 共用的已解析語料;提供時以語料為準 (python_files 被忽略),
+            未提供時逐檔串流,不整批持有 AST
 
     Returns:
         掃描結果 (Finding) 的列表
     """
     all_warnings: list[Finding] = []
 
-    trees = corpus.trees if corpus is not None else Corpus.load(python_files).trees
-    for filepath, tree in trees.items():
+    for filepath, tree in iter_trees(python_files, corpus):
         visitor = SideEffectVisitor(filepath)
 
         # 如果沒有開啟測試純潔度檢查，就強制把 is_test_file 設為 False，
