@@ -12,6 +12,8 @@ if sys.platform == "win32":
     if sys.stderr.encoding != "utf-8":
         sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
 
+from typing import TYPE_CHECKING
+
 from pyci_check.config import load, resolve_venv
 from pyci_check.cycles import find_import_cycles
 from pyci_check.deadcode import scan_dead_code
@@ -24,6 +26,9 @@ from pyci_check.side_effects import detect_side_effects
 from pyci_check.signature import check_signatures
 from pyci_check.syntax import check_files_parallel, find_python_files
 from pyci_check.utils import safe_relpath
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 
 def check_syntax(args: argparse.Namespace) -> int:
@@ -326,53 +331,25 @@ def check_all(args: argparse.Namespace) -> int:
         print(t("check_all.start"))
         print("=" * 60)
 
-    # 1. 語法檢查
-    if not args.quiet:
-        print(f"\n{t('check_all.syntax_phase')}")
-    if check_syntax(args) != 0:
-        exit_code = 1
-        if args.fail_fast:
-            return exit_code
+    # 階段表: (i18n key, 檢查函式, 是否為 blocking 檢查).
+    # blocking 檢查失敗時,--fail-fast 會立即結束;warning-only 檢查一律跑完.
+    phases: tuple[tuple[str, Callable[[argparse.Namespace], int], bool], ...] = (
+        ("check_all.syntax_phase", check_syntax, True),
+        ("check_all.imports_phase", check_imports, True),
+        ("check_all.dependency_phase", check_dependency, True),
+        ("check_all.cycles_phase", check_cycles, True),
+        ("check_all.signature_phase", check_signature, True),
+        ("check_all.side_effects_phase", check_side_effects, False),
+        ("check_all.deadcode_phase", check_deadcode, False),
+    )
 
-    # 2. Import 檢查
-    if not args.quiet:
-        print(f"\n{t('check_all.imports_phase')}")
-    if check_imports(args) != 0:
-        exit_code = 1
-        if args.fail_fast:
-            return exit_code
-
-    # 3. 依賴健康度檢查
-    if not args.quiet:
-        print(f"\n{t('check_all.dependency_phase')}")
-    if check_dependency(args) != 0:
-        exit_code = 1
-        if args.fail_fast:
-            return exit_code
-
-    # 4. 循環引用檢查
-    if not args.quiet:
-        print(f"\n{t('check_all.cycles_phase')}")
-    if check_cycles(args) != 0:
-        exit_code = 1
-
-    # 5. 跨檔案本地簽章驗證
-    if not args.quiet:
-        print(f"\n{t('check_all.signature_phase')}")
-    if check_signature(args) != 0:
-        exit_code = 1
-        if args.fail_fast:
-            return exit_code
-
-    # 6. 全局副作用檢查 (Warning only)
-    if not args.quiet:
-        print(f"\n{t('check_all.side_effects_phase')}")
-    check_side_effects(args)
-
-    # 7. 死代碼掃描 (Warning only)
-    if not args.quiet:
-        print(f"\n{t('check_all.deadcode_phase')}")
-    check_deadcode(args)
+    for phase_key, phase_fn, blocking in phases:
+        if not args.quiet:
+            print(f"\n{t(phase_key)}")
+        if phase_fn(args) != 0:
+            exit_code = 1
+            if args.fail_fast and blocking:
+                return exit_code
 
     if not args.quiet:
         print("\n" + "=" * 60)
