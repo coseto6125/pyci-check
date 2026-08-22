@@ -31,7 +31,7 @@ def get_locale() -> str:
     except (FileNotFoundError, OSError):
         # 當前目錄不存在（例如在測試中被刪除）
         return "en"
-    return _normalize_locale(cfg.language.strip())
+    return _normalize_locale(cfg.language)
 
 
 def _normalize_locale(lang: str) -> str:
