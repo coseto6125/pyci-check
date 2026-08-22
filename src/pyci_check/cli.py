@@ -16,6 +16,7 @@ from pyci_check.config import load, resolve_venv
 from pyci_check.cycles import find_import_cycles
 from pyci_check.deadcode import scan_dead_code
 from pyci_check.dependency import find_dependency_issues
+from pyci_check.findings import render_findings
 from pyci_check.git_hook import install_hooks, uninstall_hooks
 from pyci_check.i18n import t
 from pyci_check.imports import check_missing_modules, extract_from_all_files
@@ -139,9 +140,7 @@ def check_imports(args: argparse.Namespace) -> int:
                 print(t("imports.file", rel_path, import_info["line"]))
                 print(t("imports.statement", import_info["statement"]))
                 print(t("imports.reason", error_msg))
-                print(
-                    "   Hint: Ensure this module is installed in your environment (e.g., check requirements.txt/pyproject.toml). If it is a local module, verify the path or module name spelling."
-                )
+                print("   " + t("hint.imports.install"))
                 print()
                 total_errors += 1
 
@@ -195,14 +194,14 @@ def check_dependency(args: argparse.Namespace) -> int:
         print(t("dependency.phantom"))
         for p in sorted(issues["phantom"]):
             print(f"  - {p}")
-        print("  Hint: Add the above packages to pyproject.toml or requirements.txt.")
+        print("  " + t("hint.dependency.add"))
 
     if issues["orphan"]:
         # Orphan 視為警告，不一定導致 exit 1，但這裡我們先統一報出來
         print(t("dependency.orphan"))
         for p in sorted(issues["orphan"]):
             print(f"  - {p}")
-        print("  Hint: Remove the above packages from pyproject.toml or requirements.txt as they are not imported anywhere.")
+        print("  " + t("hint.dependency.remove"))
 
     if not has_issues:
         if not args.quiet:
@@ -235,9 +234,7 @@ def check_cycles(args: argparse.Namespace) -> int:
         for i, cycle in enumerate(cycles, 1):
             rel_cycle = [safe_relpath(fp, project_path) for fp in cycle]
             print(f"  {i}. {' -> '.join(rel_cycle)}")
-        print(
-            "  Hint: Import cycles usually happen when two modules depend on each other. Consider extracting the shared logic into a third module, or move the import statement inside a function/method to defer evaluation."
-        )
+        print("  " + t("hint.cycles"))
         return 1
 
     if not args.quiet:
@@ -260,9 +257,8 @@ def check_signature(args: argparse.Namespace) -> int:
 
     if errors:
         print(t("signature.found", len(errors)))
-        for err in errors:
-            rel_file = safe_relpath(err["file"], project_path)
-            print(f"  - {rel_file}:{err['line']} -> {err['func']} ({err['reason']})")
+        for line in render_findings(errors, project_path):
+            print(line)
         return 1
 
     if not args.quiet:
@@ -285,12 +281,9 @@ def check_side_effects(args: argparse.Namespace) -> int:
 
     if warnings:
         print(t("side_effects.found", len(warnings)))
-        for w in warnings:
-            rel_file = safe_relpath(w["file"], project_path)
-            print(f"  - {rel_file}:{w['line']} -> {w['call']} ({w['reason']})")
-        print(
-            "  Hint: Move top-level IO/Thread operations inside a function or a block like `if __name__ == '__main__':` to prevent slowing down module loading or polluting the global state."
-        )
+        for line in render_findings(warnings, project_path):
+            print(line)
+        print("  " + t("hint.side_effects"))
         # 僅警告，不回傳錯誤碼
         return 0
 
@@ -313,12 +306,9 @@ def check_deadcode(args: argparse.Namespace) -> int:
 
     if warnings:
         print(t("deadcode.found", len(warnings)))
-        for w in warnings:
-            rel_file = safe_relpath(w["file"], project_path)
-            print(f"  - {w['name']} (in {rel_file}:{w['line']})")
-        print(
-            "  Hint: These functions or classes are defined but never called across the entire project. Consider removing them to simplify the codebase, unless they are public APIs meant for external use (in which case, add them to `__all__`)."
-        )
+        for line in render_findings(warnings, project_path):
+            print(line)
+        print("  " + t("hint.deadcode"))
         # 僅警告，不回傳錯誤碼
         return 0
 

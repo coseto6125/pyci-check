@@ -11,11 +11,13 @@
 
 import ast
 
+from pyci_check.findings import Finding
+
 
 class SideEffectVisitor(ast.NodeVisitor):
     def __init__(self, filepath: str):
         self.filepath = filepath
-        self.warnings: list[dict] = []
+        self.warnings: list[Finding] = []
 
         # 追蹤作用域深度，只有 depth == 0 才是 top-level
         self.scope_depth = 0
@@ -87,10 +89,10 @@ class SideEffectVisitor(ast.NodeVisitor):
 
             reason = f"Top-level {reason_base.lower()}" if self.scope_depth == 0 else f"Impure test: {reason_base.lower()} detected"
 
-            self.warnings.append({"file": self.filepath, "line": lineno, "call": call_name, "reason": reason})
+            self.warnings.append(Finding(file=self.filepath, line=lineno, message=f"{call_name} ({reason})"))
 
 
-def detect_side_effects(python_files: list[str], check_test_purity: bool = False) -> list[dict]:
+def detect_side_effects(python_files: list[str], check_test_purity: bool = False) -> list[Finding]:
     """
     掃描檔案尋找頂層副作用與不純潔的測試.
 
@@ -99,11 +101,11 @@ def detect_side_effects(python_files: list[str], check_test_purity: bool = False
         check_test_purity: 是否開啟測試純潔度檢查
 
     Returns:
-        包含警告資訊的列表
+        掃描結果 (Finding) 的列表
     """
     from pyci_check.imports import read_file_with_encoding
 
-    all_warnings = []
+    all_warnings: list[Finding] = []
 
     for filepath in python_files:
         code = read_file_with_encoding(filepath)

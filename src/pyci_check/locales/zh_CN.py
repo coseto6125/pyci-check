@@ -132,4 +132,21 @@ TRANSLATIONS = {
     "syntax.error.file_error": "File Error: {}",
     "syntax.error.unexpected_error": "Unexpected Error: {}",
     "syntax.error.exception": "Exception: {}",
+    # Scanner hints (shared by CLI wrappers and standalone printers)
+    "hint.imports.relative": "Hint：请将此相对 import 改为绝对 import，以项目的 source root 为基准。",
+    "hint.imports.install": "Hint：请确认此模块已安装在环境中（例如检查 requirements.txt/pyproject.toml）；若是本地模块，请确认路径或模块名称拼写是否正确。",
+    "hint.dependency.add": "Hint：请将上述包加入 pyproject.toml 或 requirements.txt。",
+    "hint.dependency.remove": "Hint：上述包没有被任何地方 import，请从 pyproject.toml 或 requirements.txt 移除。",
+    "hint.cycles": "Hint：循环引用通常来自两个模块互相依赖。可将共用逻辑抽到第三个模块，或把 import 移到函数/方法内以延后加载。",
+    "hint.side_effects": "Hint：请把顶层的 IO/Thread 操作移进函数，或包在 `if __name__ == '__main__':` 区块内，避免拖慢模块加载或污染全局状态。",
+    "hint.deadcode": "Hint：这些函数或类在整个项目内都没有被调用。若非对外的 public API，建议移除以简化代码；若要保留，请加入 `__all__`。",
+    # Signature validation
+    "signature.error.too_many_positional": "位置参数过多：最多 {max_pos} 个，实际传入 {provided} 个",
+    "signature.error.unknown_keywords": "未预期的关键字参数：{names}",
+    "signature.error.missing_positional": "缺少必填的位置参数：至少需要 {min_pos} 个，实际传入 {total_matched} 个",
+    "signature.error.missing_kwonly": "缺少必填的 keyword-only 参数：{names}",
+    "signature.hint.too_many_positional": "移除多余的 {extra} 个位置参数；若函数有接受，也可改以关键字参数传入。",
+    "signature.hint.unknown_keywords": "移除或改名无效的关键字参数：{names}。请对照函数定义确认参数名称。",
+    "signature.hint.missing_positional": "补上缺少的 {missing} 个必填位置参数，并对照函数签名确认内容。",
+    "signature.hint.missing_kwonly": "以下参数必须以关键字参数明确传入（例如 param=value）：{names}。",
 }

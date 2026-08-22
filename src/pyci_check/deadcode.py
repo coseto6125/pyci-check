@@ -10,6 +10,8 @@
 
 import ast
 
+from pyci_check.findings import Finding
+
 
 class DefinitionVisitor(ast.NodeVisitor):
     def __init__(self, filepath: str):
@@ -65,7 +67,7 @@ class UsageVisitor(ast.NodeVisitor):
     # 會被上面的方法捕獲。
 
 
-def scan_dead_code(python_files: list[str]) -> list[dict]:
+def scan_dead_code(python_files: list[str]) -> list[Finding]:
     """
     掃描專案尋找可能未被呼叫的定義.
 
@@ -108,7 +110,7 @@ def scan_dead_code(python_files: list[str]) -> list[dict]:
             pass
 
     # 分析結果
-    warnings = []
+    warnings: list[Finding] = []
 
     # 常見的框架鉤子/白名單 (不應被報警)
     whitelist = {
@@ -125,15 +127,17 @@ def scan_dead_code(python_files: list[str]) -> list[dict]:
             continue
 
         # 測試檔案中的定義 (例如 test_foo) 不算死代碼，它們是由測試運行器呼叫的
-        [loc for loc in locations if not loc["file"].endswith("test_" + name + ".py")]
-
         # 簡化判斷：如果一個符號的定義都在 test 檔案裡 (或者開頭是 test_)，略過
         if name.startswith(("test_", "fixture_")):
             continue
 
         if name not in usage_visitor.used_names:
             warnings.extend(
-                {"file": loc["file"], "line": loc["line"], "name": name, "reason": "Definition appears to be unused across the project"}
+                Finding(
+                    file=loc["file"],
+                    line=loc["line"],
+                    message=f"'{name}' is defined but never used across the project",
+                )
                 for loc in locations
             )
 

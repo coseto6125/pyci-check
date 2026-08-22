@@ -850,7 +850,7 @@ def print_results(
         for rel_import in all_relative_imports:
             # 錯誤訊息不受 --quiet 影響,總是顯示
             print(t("imports.standalone.relative_warning", rel_import["file"], rel_import["line"], rel_import["statement"]))
-            print("       Hint: Change this relative import to an absolute import based on your project's source root.")
+            print("       " + t("hint.imports.relative"))
 
     if missing_modules:
         has_issues = True
@@ -865,7 +865,7 @@ def print_results(
                 print(t("imports.standalone.statement", import_info["statement"]))
                 print(t("imports.standalone.reason", error_msg))
                 print(
-                    "       Hint: Ensure this module is installed in your environment (e.g., check requirements.txt/pyproject.toml). If it is a local module, verify the path or module name spelling."
+                    "       " + t("hint.imports.install"),
                 )
                 print()
                 total_errors += 1

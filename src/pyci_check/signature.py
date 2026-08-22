@@ -9,6 +9,9 @@ import ast
 import os
 from dataclasses import dataclass
 
+from pyci_check.findings import Finding
+from pyci_check.i18n import t
+
 
 @dataclass
 class Signature:
@@ -111,7 +114,6 @@ class DefinitionCollector(ast.NodeVisitor):
 
         # Keyword-only
         kwonly_args = {a.arg for a in node.args.kwonlyargs}
-        sum(1 for d in node.args.kw_defaults if d is not None)
         required_kwonly = {a.arg for a, d in zip(node.args.kwonlyargs, node.args.kw_defaults) if d is None}
 
         has_varargs = node.args.vararg is not None
@@ -215,11 +217,11 @@ class CallValidator(ast.NodeVisitor):
             self._report(
                 node.lineno,
                 full_name,
-                f"Too many positional arguments: expected at most {sig.max_pos}, got {provided_pos}",
+                t("signature.error.too_many_positional", max_pos=sig.max_pos, provided=provided_pos),
                 sig,
                 provided_pos,
                 provided_kws,
-                f"Remove the extra {provided_pos - sig.max_pos} positional argument(s), or convert them to keyword arguments if the function accepts them.",
+                t("signature.hint.too_many_positional", extra=provided_pos - sig.max_pos),
             )
             return
 
@@ -230,11 +232,11 @@ class CallValidator(ast.NodeVisitor):
                 self._report(
                     node.lineno,
                     full_name,
-                    f"Unexpected keyword arguments: {', '.join(unknown_kws)}",
+                    t("signature.error.unknown_keywords", names=", ".join(unknown_kws)),
                     sig,
                     provided_pos,
                     provided_kws,
-                    f"Remove or rename the invalid keyword argument(s): {', '.join(unknown_kws)}. Check the function definition for correct parameter names.",
+                    t("signature.hint.unknown_keywords", names=", ".join(unknown_kws)),
                 )
                 return
 
@@ -246,11 +248,11 @@ class CallValidator(ast.NodeVisitor):
             self._report(
                 node.lineno,
                 full_name,
-                f"Missing required positional arguments: expected at least {sig.min_pos}, got {total_matched_pos}",
+                t("signature.error.missing_positional", min_pos=sig.min_pos, total_matched=total_matched_pos),
                 sig,
                 provided_pos,
                 provided_kws,
-                f"Supply the missing {sig.min_pos - total_matched_pos} required positional argument(s). Review the function signature to see what is missing.",
+                t("signature.hint.missing_positional", missing=sig.min_pos - total_matched_pos),
             )
 
         missing_kwonly = sig.required_kwonly - provided_kws
@@ -258,11 +260,11 @@ class CallValidator(ast.NodeVisitor):
             self._report(
                 node.lineno,
                 full_name,
-                f"Missing required keyword-only arguments: {', '.join(missing_kwonly)}",
+                t("signature.error.missing_kwonly", names=", ".join(missing_kwonly)),
                 sig,
                 provided_pos,
                 provided_kws,
-                f"You must explicitly pass the following arguments as keyword arguments (e.g., param=value): {', '.join(missing_kwonly)}.",
+                t("signature.hint.missing_kwonly", names=", ".join(missing_kwonly)),
             )
 
     def _report(self, lineno: int, func: str, error_msg: str, sig: Signature, provided_pos: int, provided_kws: set[str], hint: str):
@@ -280,7 +282,7 @@ class CallValidator(ast.NodeVisitor):
 
         detailed_reason = f"{error_msg}\n       Expected : {expected_str}\n       Actual   : {actual_str}\n       Hint     : {hint}"
 
-        self.errors.append({"file": self.filepath, "line": lineno, "func": func, "reason": detailed_reason})
+        self.errors.append(Finding(file=self.filepath, line=lineno, message=f"{func} ({detailed_reason})", severity="error"))
 
 
 def _get_module_name(filepath: str, project_dir: str, src_dirs: list[str]) -> str:
@@ -299,12 +301,12 @@ def _get_module_name(filepath: str, project_dir: str, src_dirs: list[str]) -> st
     return best_mod or os.path.basename(filepath).removesuffix(".py")
 
 
-def check_signatures(python_files: list[str], project_dir: str, src_dirs: list[str]) -> list[dict]:
+def check_signatures(python_files: list[str], project_dir: str, src_dirs: list[str]) -> list[Finding]:
     """
     掃描專案，執行本地簽章驗證.
 
     Returns:
-        包含錯誤資訊的列表
+        簽章錯誤 (Finding) 的列表
     """
     from pyci_check.imports import read_file_with_encoding
 
@@ -333,7 +335,7 @@ def check_signatures(python_files: list[str], project_dir: str, src_dirs: list[s
             pass
 
     # 2. 驗證所有檔案
-    all_errors = []
+    all_errors: list[Finding] = []
     for filepath, tree in file_asts.items():
         validator = CallValidator(filepath, file_modules[filepath], global_signatures)
         validator.visit(tree)

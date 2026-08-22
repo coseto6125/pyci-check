@@ -1,6 +1,7 @@
 """測試死代碼掃描與副作用偵測."""
 
 from pyci_check.deadcode import scan_dead_code
+from pyci_check.findings import Finding
 from pyci_check.side_effects import detect_side_effects
 
 
@@ -28,8 +29,9 @@ response = requests.get('http://example.com')
     warnings = detect_side_effects([str(safe_file), str(danger_file)])
 
     assert len(warnings) == 1
-    assert "danger.py" in warnings[0]["file"]
-    assert "requests.get" in warnings[0]["call"]
+    assert isinstance(warnings[0], Finding)
+    assert "danger.py" in warnings[0].file
+    assert "requests.get" in warnings[0].message
 
 
 def test_deadcode_scan(tmp_path):
@@ -62,7 +64,6 @@ def main():
     # 預期 main 會在 whitelist 中被忽略
     # used_func 被使用了
     # 只有 unused_func 應該被報告
-    dead_names = [w["name"] for w in warnings]
-    assert "unused_func" in dead_names
-    assert "used_func" not in dead_names
-    assert "main" not in dead_names
+    dead_msgs = [f.message for f in warnings]
+    assert len(dead_msgs) == 1
+    assert "'unused_func'" in dead_msgs[0]
