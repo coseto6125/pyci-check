@@ -1,8 +1,9 @@
 """Internationalization support."""
 
 import os
-import tomllib
 from functools import lru_cache
+
+from pyci_check.config import load
 
 # 效能優化: 預先定義語言對照表避免重複創建字典
 # 所有鍵都使用小寫,且統一將 - 轉為 _
@@ -15,31 +16,6 @@ _LOCALE_MAP = {
 }
 
 
-@lru_cache(maxsize=1)
-def _find_pyproject_toml() -> str | None:
-    """
-    尋找 pyproject.toml 檔案.
-
-    優化: 使用 lru_cache 快取結果,避免重複遍歷目錄
-    """
-    try:
-        current = os.getcwd()
-    except (FileNotFoundError, OSError):
-        # 當前目錄不存在（例如在測試中被刪除）
-        return None
-
-    while True:
-        pyproject = os.path.join(current, "pyproject.toml")
-        if os.path.exists(pyproject):
-            return pyproject
-        parent = os.path.dirname(current)
-        if parent == current:  # 已到根目錄
-            break
-        current = parent
-    return None
-
-
-@lru_cache(maxsize=1)
 def get_locale() -> str:
     """
     取得當前語言設定.
@@ -47,26 +23,15 @@ def get_locale() -> str:
     優先順序:
     1. pyproject.toml 中的 [tool.pyci-check] language 設定
     2. 預設 en
+
+    設定的讀取與快取集中在 pyci_check.config.load.
     """
-    # 從 pyproject.toml 讀取
-    pyproject_path = _find_pyproject_toml()
-    if not pyproject_path:
-        return "en"
-
     try:
-        with open(pyproject_path, "rb") as f:
-            data = tomllib.load(f)
-    except (OSError, tomllib.TOMLDecodeError):
+        cfg = load(os.getcwd())
+    except (FileNotFoundError, OSError):
+        # 當前目錄不存在（例如在測試中被刪除）
         return "en"
-
-    # 讀取 [tool.pyci-check] language
-    pyci_check = data.get("tool", {}).get("pyci-check", {})
-    lang = pyci_check.get("language")
-
-    if lang and isinstance(lang, str):
-        return _normalize_locale(lang.strip())
-
-    return "en"
+    return _normalize_locale(cfg.language.strip())
 
 
 def _normalize_locale(lang: str) -> str:

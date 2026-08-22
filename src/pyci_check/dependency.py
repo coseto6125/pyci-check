@@ -10,6 +10,7 @@ import os
 import re
 import tomllib
 
+from pyci_check.config import find_pyproject
 from pyci_check.imports import _stdlib_top_levels
 
 
@@ -84,9 +85,9 @@ def get_declared_dependencies(project_dir: str) -> set[str]:
     """獲取專案宣告的所有依賴 (包名)."""
     all_deps = set()
 
-    # 1. pyproject.toml
-    pyproject = os.path.join(project_dir, "pyproject.toml")
-    if os.path.exists(pyproject):
+    # 1. pyproject.toml (往上層搜尋的規則集中在 config.find_pyproject)
+    pyproject = find_pyproject(project_dir)
+    if pyproject is not None:
         all_deps.update(parse_pyproject_dependencies(pyproject))
 
     # 2. requirements.txt (及常見變體)

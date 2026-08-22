@@ -19,12 +19,13 @@ import runpy
 import subprocess
 import sys
 import time
-import tomllib
 from argparse import Namespace
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from functools import lru_cache
 
+from pyci_check.config import find_pyproject
+from pyci_check.config import load as load_config
 from pyci_check.i18n import t
 from pyci_check.utils import calculate_optimal_workers, get_exclude_dirs_set, safe_relpath, should_use_thread_pool, walk_python_files
 
@@ -119,129 +120,25 @@ class _FindSpecCache:
             pass
 
 
-@lru_cache(maxsize=1)
 def find_pyproject_toml(project_dir: str) -> str | None:
-    """尋找 pyproject.toml (快取結果)."""
-    pyproject_path = os.path.join(project_dir, "pyproject.toml")
-    if os.path.exists(pyproject_path):
-        return pyproject_path
-
-    # 往上層尋找
-    current = os.path.abspath(project_dir)
-    while True:
-        parent = os.path.dirname(current)
-        if parent == current:  # 已到根目錄
-            break
-        candidate = os.path.join(parent, "pyproject.toml")
-        if os.path.exists(candidate):
-            return candidate
-        current = parent
-
-    return None
+    """尋找 pyproject.toml (實作集中在 pyci_check.config)."""
+    return find_pyproject(project_dir)
 
 
-@lru_cache(maxsize=1)
 def get_ruff_config_from_pyproject(project_dir: str) -> dict:
-    """
-    從 pyproject.toml 讀取 ruff 設定.
-
-    合併 [tool.pyci-check] 和 [tool.ruff] 的 exclude 和 extend-exclude 設定.
-
-    合併順序:
-    - [tool.pyci-check].exclude
-    - [tool.pyci-check].extend-exclude
-    - [tool.ruff].exclude
-    - [tool.ruff].extend-exclude
-
-    Returns:
-        dict with keys: src, exclude_dirs, exclude_files
-    """
-    pyproject_path = find_pyproject_toml(project_dir)
-    if not pyproject_path:
-        return {"src": [], "exclude_dirs": [], "exclude_files": [], "check_test_purity": False}
-
-    try:
-        with open(pyproject_path, "rb") as f:
-            data = tomllib.load(f)
-    except (OSError, tomllib.TOMLDecodeError):
-        # 檔案讀取失敗或 TOML 格式錯誤,使用預設設定
-        return {"src": [], "exclude_dirs": [], "exclude_files": [], "check_test_purity": False}
-
-    ruff = data.get("tool", {}).get("ruff", {})
-    pyci_check = data.get("tool", {}).get("pyci-check", {})
-
-    # 讀取 src
-    src = ruff.get("src", [])
-    if isinstance(src, str):
-        src = [src]
-
-    # 讀取 pyci-check 的 exclude + extend-exclude
-    pyci_exclude = pyci_check.get("exclude", [])
-    if isinstance(pyci_exclude, str):
-        pyci_exclude = [pyci_exclude]
-
-    pyci_extend_exclude = pyci_check.get("extend-exclude", [])
-    if isinstance(pyci_extend_exclude, str):
-        pyci_extend_exclude = [pyci_extend_exclude]
-
-    # 讀取 ruff 的 exclude + extend-exclude
-    exclude = ruff.get("exclude", [])
-    if isinstance(exclude, str):
-        exclude = [exclude]
-
-    extend_exclude = ruff.get("extend-exclude", [])
-    if isinstance(extend_exclude, str):
-        extend_exclude = [extend_exclude]
-
-    # 合併去重: pyci-check 的 exclude + extend-exclude + ruff 的 exclude + extend-exclude
-    all_exclude = set(pyci_exclude + pyci_extend_exclude + exclude + extend_exclude)
-
-    # 合併並分類
-    exclude_dirs = []
-    exclude_files = []
-
-    for item in all_exclude:
-        # 移除尾部斜線
-        item = item.rstrip("/")
-        # 判斷是否為檔案（有副檔名）
-        basename = os.path.basename(item)
-        if "." in basename and not item.startswith("."):
-            exclude_files.append(item)
-        else:
-            exclude_dirs.append(item)
-
-    check_test_purity = pyci_check.get("check-test-purity", False)
-
-    return {"src": src, "exclude_dirs": exclude_dirs, "exclude_files": exclude_files, "check_test_purity": check_test_purity}
+    """合併 [tool.pyci-check] 與 [tool.ruff] 的 exclude/src (實作集中在 pyci_check.config)."""
+    cfg = load_config(project_dir)
+    return {
+        "src": list(cfg.src_dirs),
+        "exclude_dirs": list(cfg.exclude_dirs),
+        "exclude_files": list(cfg.exclude_files),
+        "check_test_purity": cfg.check_test_purity,
+    }
 
 
-@lru_cache(maxsize=1)
 def get_venv_from_pyproject(project_dir: str) -> str | None:
-    """
-    從 pyproject.toml 讀取虛擬環境設定.
-
-    Returns:
-        虛擬環境路徑或 None
-    """
-    pyproject_path = find_pyproject_toml(project_dir)
-    if not pyproject_path:
-        return None
-
-    try:
-        with open(pyproject_path, "rb") as f:
-            data = tomllib.load(f)
-    except (OSError, tomllib.TOMLDecodeError):
-        # 檔案讀取失敗或 TOML 格式錯誤
-        return None
-
-    # 讀取 [tool.pyci-check] 中的 venv 設定
-    pyci_check = data.get("tool", {}).get("pyci-check", {})
-    venv = pyci_check.get("venv")
-
-    if venv and isinstance(venv, str):
-        return venv
-
-    return None
+    """讀取 [tool.pyci-check] venv (實作集中在 pyci_check.config)."""
+    return load_config(project_dir).venv_setting
 
 
 _OPTIONAL_IMPORT_EXC_NAMES = frozenset({"ImportError", "ModuleNotFoundError", "Exception", "BaseException"})

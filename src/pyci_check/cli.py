@@ -12,17 +12,13 @@ if sys.platform == "win32":
     if sys.stderr.encoding != "utf-8":
         sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
 
+from pyci_check.config import load, resolve_venv
 from pyci_check.cycles import find_import_cycles
 from pyci_check.deadcode import scan_dead_code
 from pyci_check.dependency import find_dependency_issues
 from pyci_check.git_hook import install_hooks, uninstall_hooks
 from pyci_check.i18n import t
-from pyci_check.imports import (
-    check_missing_modules,
-    extract_from_all_files,
-    get_ruff_config_from_pyproject,
-    get_venv_from_pyproject,
-)
+from pyci_check.imports import check_missing_modules, extract_from_all_files
 from pyci_check.side_effects import detect_side_effects
 from pyci_check.signature import check_signatures
 from pyci_check.syntax import check_files_parallel, find_python_files
@@ -75,24 +71,13 @@ def check_imports(args: argparse.Namespace) -> int:
     # 判斷使用靜態檢查還是真實執行
     use_static = not getattr(args, "i_understand_this_will_execute_code", False)
 
-    ruff_config = get_ruff_config_from_pyproject(project_path)
+    cfg = load(project_path)
+    src_dirs = list(cfg.src_dirs)
+    ignore_dirs = cfg.exclude_dirs
+    ignore_files = cfg.exclude_files
 
-    src_dirs = ruff_config["src"]
-    ignore_dirs = set(ruff_config["exclude_dirs"])
-    ignore_files = set(ruff_config["exclude_files"])
-
-    # 取得 venv 路徑 (優先順序: CLI 參數 > pyproject.toml > 自動偵測 .venv)
-    venv_path = getattr(args, "venv", None)
-
-    if not venv_path:
-        # 從 pyproject.toml 讀取
-        venv_path = get_venv_from_pyproject(project_path)
-
-    if not venv_path:
-        # 自動偵測 .venv
-        venv_dir = os.path.join(project_path, ".venv")
-        if os.path.exists(venv_dir):
-            venv_path = "."
+    # venv 優先順序 (CLI 參數 > pyproject.toml > 自動偵測 .venv) 集中在 config.resolve_venv
+    venv_path = resolve_venv(getattr(args, "venv", None), cfg)
 
     if not args.quiet:
         print(t("imports.checking"))
@@ -176,10 +161,10 @@ def check_imports(args: argparse.Namespace) -> int:
 def check_dependency(args: argparse.Namespace) -> int:
     """執行依賴健康度檢查."""
     project_path = os.getcwd()
-    ruff_config = get_ruff_config_from_pyproject(project_path)
-    ignore_dirs = set(ruff_config["exclude_dirs"])
-    ignore_files = set(ruff_config["exclude_files"])
-    src_dirs = ruff_config["src"]
+    cfg = load(project_path)
+    ignore_dirs = cfg.exclude_dirs
+    ignore_files = cfg.exclude_files
+    src_dirs = list(cfg.src_dirs)
 
     if not args.quiet:
         print(t("dependency.checking"))
@@ -229,10 +214,10 @@ def check_dependency(args: argparse.Namespace) -> int:
 def check_cycles(args: argparse.Namespace) -> int:
     """執行循環引用檢查."""
     project_path = os.getcwd()
-    ruff_config = get_ruff_config_from_pyproject(project_path)
-    ignore_dirs = set(ruff_config["exclude_dirs"])
-    ignore_files = set(ruff_config["exclude_files"])
-    src_dirs = ruff_config["src"]
+    cfg = load(project_path)
+    ignore_dirs = cfg.exclude_dirs
+    ignore_files = cfg.exclude_files
+    src_dirs = list(cfg.src_dirs)
 
     if not args.quiet:
         print(t("cycles.checking"))
@@ -263,9 +248,9 @@ def check_cycles(args: argparse.Namespace) -> int:
 def check_signature(args: argparse.Namespace) -> int:
     """執行跨檔案本地簽章驗證."""
     project_path = os.getcwd()
-    ruff_config = get_ruff_config_from_pyproject(project_path)
-    ignore_dirs = set(ruff_config["exclude_dirs"])
-    src_dirs = ruff_config["src"]
+    cfg = load(project_path)
+    ignore_dirs = cfg.exclude_dirs
+    src_dirs = list(cfg.src_dirs)
     python_files = find_python_files(project_path, exclude_dirs=list(ignore_dirs))
 
     if not args.quiet:
@@ -288,9 +273,9 @@ def check_signature(args: argparse.Namespace) -> int:
 def check_side_effects(args: argparse.Namespace) -> int:
     """執行全局副作用檢查 (僅警告)."""
     project_path = os.getcwd()
-    ruff_config = get_ruff_config_from_pyproject(project_path)
-    ignore_dirs = set(ruff_config["exclude_dirs"])
-    check_test_purity = ruff_config.get("check_test_purity", False)
+    cfg = load(project_path)
+    ignore_dirs = cfg.exclude_dirs
+    check_test_purity = cfg.check_test_purity
     python_files = find_python_files(project_path, exclude_dirs=list(ignore_dirs))
 
     if not args.quiet:
@@ -317,8 +302,8 @@ def check_side_effects(args: argparse.Namespace) -> int:
 def check_deadcode(args: argparse.Namespace) -> int:
     """執行死代碼掃描 (僅警告)."""
     project_path = os.getcwd()
-    ruff_config = get_ruff_config_from_pyproject(project_path)
-    ignore_dirs = set(ruff_config["exclude_dirs"])
+    cfg = load(project_path)
+    ignore_dirs = cfg.exclude_dirs
     python_files = find_python_files(project_path, exclude_dirs=list(ignore_dirs))
 
     if not args.quiet:

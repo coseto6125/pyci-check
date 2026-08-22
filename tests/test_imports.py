@@ -128,9 +128,6 @@ from ..utils import helper
             pyproject_path = Path(tmpdir) / "pyproject.toml"
             pyproject_path.write_text("[tool.pyci-check]\nlanguage = 'en'\n", encoding="utf-8")
 
-            # 清除 cache
-            find_pyproject_toml.cache_clear()
-
             result = find_pyproject_toml(tmpdir)
 
             assert result is not None
@@ -149,9 +146,6 @@ extend-exclude = ["*.egg-info"]
 """
             pyproject_path.write_text(pyproject_content, encoding="utf-8")
 
-            # 清除 cache
-            get_ruff_config_from_pyproject.cache_clear()
-
             config = get_ruff_config_from_pyproject(tmpdir)
 
             assert "src" in config
@@ -164,9 +158,6 @@ extend-exclude = ["*.egg-info"]
     def test_get_ruff_config_no_pyproject(self):
         """測試沒有 pyproject.toml 的情況."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            # 清除 cache
-            get_ruff_config_from_pyproject.cache_clear()
-
             config = get_ruff_config_from_pyproject(tmpdir)
 
             # 應該返回預設值
@@ -190,9 +181,6 @@ exclude = ["node_modules"]
 extend-exclude = ["starlette_app.py"]
 """
             pyproject_path.write_text(pyproject_content, encoding="utf-8")
-
-            # 清除 cache
-            get_ruff_config_from_pyproject.cache_clear()
 
             config = get_ruff_config_from_pyproject(tmpdir)
 
