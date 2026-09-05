@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Signature checking skips functions with unknown decorators because a
+  decorator may replace the callable or change its runtime signature. Known
+  signature-preserving `functools.cache` and `functools.lru_cache` decorators
+  remain checked; unknown decorators trade coverage for avoiding false errors.
+### Fixed
+- Cross-file signature checking no longer assumes that every class without an
+  explicit constructor accepts zero arguments. Resolvable local inheritance
+  now carries forward the parent constructor, field-synthesized subclasses
+  merge their own annotated fields with override semantics, `ClassVar`
+  annotations are excluded from constructor fields, and unverifiable
+  constructors are skipped.
+- Qualified `@dataclasses.dataclass`, `msgspec.Struct`, `NamedTuple`, and
+  `staticmethod` signatures are handled without the previous false positives.
+- Definitions are indexed under both project-relative and configured
+  source-root-relative module names, so imports that retain a source directory
+  package prefix resolve to the same signature. Previously a call written as
+  `from pkg.mod import Thing` never matched a definition indexed as `mod.Thing`,
+  and every cross-file call of that shape went unchecked.
+
+
 ### Planned
 
 ## [0.3.4] - 2026-08-22
