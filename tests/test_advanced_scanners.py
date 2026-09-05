@@ -126,36 +126,3 @@ def test_iter_trees_streams_valid_files_and_skips_broken(tmp_path):
     pairs = dict(iter_trees([str(good), str(bad), missing]))
     assert list(pairs) == [str(good)]
     assert isinstance(pairs[str(good)], __import__("ast").Module)
-
-
-def test_a_decorated_definition_is_not_reported_as_dead():
-    """
-    A route's caller is its framework, and that call is not in the source.
-
-    The scan matched names, so every `@app.get(...)` handler, lifecycle hook and
-    fixture read as an orphan: one real project returned sixteen entries, all of them
-    live registered handlers. Sixteen is the count at which people stop reading the
-    output, which costs more than the orphans it would have found.
-    """
-    import ast
-
-    from pyci_check.deadcode import DefinitionVisitor
-
-    module = """
-@app.get("/")
-async def index(request):
-    return None
-
-@app.before_server_start
-async def open_db(app, loop):
-    return None
-
-def helper():
-    return None
-"""
-    collector = DefinitionVisitor("web.py")
-    collector.visit(ast.parse(module))
-
-    assert "helper" in collector.definitions, "an undecorated function is still scanned"
-    assert "index" not in collector.definitions
-    assert "open_db" not in collector.definitions

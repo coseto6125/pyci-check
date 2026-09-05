@@ -14,30 +14,6 @@ from pyci_check.corpus import Corpus, iter_trees
 from pyci_check.findings import Finding
 
 
-def _is_registered(node) -> bool:
-    """
-    Say whether a decorator hands this name to something else to call.
-
-    Args:
-        node: A FunctionDef, AsyncFunctionDef or ClassDef.
-
-    Returns:
-        True when it carries any decorator.
-
-    A decorated function's caller is usually the decorator's owner — a web framework's
-    router, a lifecycle hook, a task queue, a fixture — and that call never appears in
-    the source, so a name-based scan reports every route in the project as dead. One
-    real project returned sixteen entries, all of them registered handlers, which is
-    the number at which people stop reading the output.
-
-    Deliberately blunt: a decorator that registers nothing (functools.cache, say) buys
-    its function an exemption it did not need. That trade is the right way round for a
-    warning-level scan — a missed orphan costs a little tidiness, a false positive on a
-    live route costs the reader's trust in every other line.
-    """
-    return bool(node.decorator_list)
-
-
 class DefinitionVisitor(ast.NodeVisitor):
     def __init__(self, filepath: str):
         self.filepath = filepath
@@ -47,19 +23,18 @@ class DefinitionVisitor(ast.NodeVisitor):
         self.exported: set[str] = set()
 
     def visit_FunctionDef(self, node: ast.FunctionDef):
-        # 排除魔術方法與被裝飾器註冊出去的名字
-        if not (node.name.startswith("__") and node.name.endswith("__")) and not _is_registered(node):
+        # 排除魔術方法
+        if not (node.name.startswith("__") and node.name.endswith("__")):
             self.definitions[node.name] = node.lineno
         self.generic_visit(node)
 
     def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef):
-        if not (node.name.startswith("__") and node.name.endswith("__")) and not _is_registered(node):
+        if not (node.name.startswith("__") and node.name.endswith("__")):
             self.definitions[node.name] = node.lineno
         self.generic_visit(node)
 
     def visit_ClassDef(self, node: ast.ClassDef):
-        if not _is_registered(node):
-            self.definitions[node.name] = node.lineno
+        self.definitions[node.name] = node.lineno
         self.generic_visit(node)
 
     def visit_Assign(self, node: ast.Assign):
