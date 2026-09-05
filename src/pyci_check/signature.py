@@ -13,6 +13,40 @@ from pyci_check.corpus import Corpus
 from pyci_check.findings import Finding
 from pyci_check.i18n import t
 
+_FIELD_BASES = frozenset(
+    {
+        "Struct",  # msgspec
+        "BaseModel",  # pydantic
+        "NamedTuple",  # typing
+        "TypedDict",  # typing
+    }
+)
+"""Bases whose subclasses declare their fields as class-level annotations.
+
+Each synthesises `__init__` from those annotations, so the fields are the constructor's
+keyword arguments even though no `__init__` appears in the source.
+"""
+
+
+def _base_name(base: ast.expr) -> str:
+    """
+    Read the bare name of a base class, however it was written.
+
+    Args:
+        base: One entry of a ClassDef's `bases`.
+
+    Returns:
+        `Struct` for `Struct`, `msgspec.Struct` and `Struct(frozen=True)` alike, and the
+        empty string for a base this cannot read.
+    """
+    if isinstance(base, ast.Call):
+        base = base.func
+    if isinstance(base, ast.Attribute):
+        return base.attr
+    if isinstance(base, ast.Name):
+        return base.id
+    return ""
+
 
 @dataclass
 class Signature:
@@ -53,7 +87,13 @@ class DefinitionCollector(ast.NodeVisitor):
             for d in node.decorator_list
         )
 
-        if is_dataclass:
+        # 欄位也可能來自基底類別而不是裝飾器。msgspec.Struct、NamedTuple、TypedDict 與
+        # pydantic.BaseModel 都用類別層級的註解宣告欄位，建構子由基底類別合成。只看裝飾
+        # 器會把這些類別判成「建構子不收任何參數」，於是每一次 Struct(field=...) 都成了
+        # 誤報：一個 policydesk 專案上跑出 256 個，全部來自這一條，真訊號被淹掉。
+        is_annotated_base = any(_base_name(base) in _FIELD_BASES for base in node.bases)
+
+        if is_dataclass or is_annotated_base:
             # 蒐集所有的 field
             fields = [stmt.target.id for stmt in node.body if isinstance(stmt, ast.AnnAssign) and isinstance(stmt.target, ast.Name)]
 
