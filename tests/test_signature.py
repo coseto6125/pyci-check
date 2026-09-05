@@ -121,8 +121,8 @@ Outcome(status="ok", bogus=True)
     )
 
     assert len(errors) == 1
-    assert errors[0]["line"] == 9
-    assert "Unexpected keyword arguments: bogus" in errors[0]["reason"]
+    assert errors[0].line == 9
+    assert "Unexpected keyword arguments: bogus" in errors[0].message
 
 
 def test_check_signatures_msgspec_subclass_merges_inherited_and_own_fields(tmp_path: Path):
@@ -143,7 +143,7 @@ Child(a="a", b="b", bogus=True)
     )
 
     assert len(errors) == 1
-    assert "Unexpected keyword arguments: bogus" in errors[0]["reason"]
+    assert "Unexpected keyword arguments: bogus" in errors[0].message
 
 
 def test_check_signatures_msgspec_kwonly_subclass_default_overrides_required_field(tmp_path: Path):
@@ -164,7 +164,7 @@ Child(bogus=True)
     )
 
     assert len(errors) == 1
-    assert "Unexpected keyword arguments: bogus" in errors[0]["reason"]
+    assert "Unexpected keyword arguments: bogus" in errors[0].message
 
 
 def test_check_signatures_msgspec_positional_subclass_default_overrides_required_field(tmp_path: Path):
@@ -185,7 +185,7 @@ Child("first", "second")
     )
 
     assert len(errors) == 1
-    assert "Too many positional arguments: expected at most 1, got 2" in errors[0]["reason"]
+    assert "Too many positional arguments: expected at most 1, got 2" in errors[0].message
 
 
 def test_check_signatures_msgspec_classvar_is_not_a_constructor_field(tmp_path: Path):
@@ -205,7 +205,7 @@ Model(kind="override")
     )
 
     assert len(errors) == 1
-    assert "Unexpected keyword arguments: kind" in errors[0]["reason"]
+    assert "Unexpected keyword arguments: kind" in errors[0].message
 
 
 def test_check_signatures_exception_subclass_inherits_constructor(tmp_path: Path):
@@ -239,7 +239,7 @@ Child(1, wrong=2)
     )
 
     assert len(errors) == 1
-    assert "Unexpected keyword arguments: wrong" in errors[0]["reason"]
+    assert "Unexpected keyword arguments: wrong" in errors[0].message
 
 
 def test_check_signatures_cross_file_import_matches_project_relative_alias(tmp_path: Path):
@@ -269,7 +269,7 @@ ReplicaOutcome(bogus=1)
     errors = check_signatures([str(manager), str(consumer)], str(tmp_path), ["enoract"])
 
     assert len(errors) == 1
-    assert "Unexpected keyword arguments: bogus" in errors[0]["reason"]
+    assert "Unexpected keyword arguments: bogus" in errors[0].message
 
 
 def test_check_signatures_qualified_dataclass_decorator(tmp_path: Path):
@@ -288,7 +288,7 @@ Record(wrong="bad")
     )
 
     assert len(errors) == 1
-    assert "Unexpected keyword arguments: wrong" in errors[0]["reason"]
+    assert "Unexpected keyword arguments: wrong" in errors[0].message
 
 
 def test_check_signatures_named_tuple_uses_annotated_fields(tmp_path: Path):
@@ -307,7 +307,7 @@ Pair(left="a", wrong="b")
     )
 
     assert len(errors) == 1
-    assert "Unexpected keyword arguments: wrong" in errors[0]["reason"]
+    assert "Unexpected keyword arguments: wrong" in errors[0].message
 
 
 def test_check_signatures_staticmethod_keeps_first_parameter(tmp_path: Path):
@@ -361,7 +361,7 @@ combine(1, 2, 3, 4)
     )
 
     assert len(errors) == 1
-    assert "Too many positional arguments: expected at most 2, got 4" in errors[0]["reason"]
+    assert "Too many positional arguments: expected at most 2, got 4" in errors[0].message
 
 
 def test_check_signatures_skips_decorator_modified_class(tmp_path: Path):
