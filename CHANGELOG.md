@@ -30,6 +30,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Planned
 
+## [0.3.5] - 2026-09-06
+
+Patch release. Three false-positive classes that a real project tripped on.
+
+### Changed
+
+- Signature checking skips functions with unknown decorators, because a
+  decorator may replace the callable or change its runtime signature. The
+  signature-preserving `functools.cache` and `functools.lru_cache` stay
+  checked; an unknown decorator trades coverage for not reporting an error
+  that is not there.
+
+### Fixed
+
+- Cross-file signature checking no longer assumes that every class without an
+  explicit constructor accepts zero arguments. Resolvable local inheritance
+  carries the parent constructor forward, field-synthesized subclasses merge
+  their own annotated fields with override semantics, `ClassVar` annotations
+  are excluded from constructor fields, and an unverifiable constructor is
+  skipped.
+- Qualified `@dataclasses.dataclass`, `msgspec.Struct`, `NamedTuple` and
+  `staticmethod` signatures are read without the previous false positives.
+- Definitions are indexed under both the project-relative and the configured
+  source-root-relative module name, so an import that keeps a source directory
+  package prefix resolves to the same signature. A call written as
+  `from pkg.mod import Thing` never matched a definition indexed as
+  `mod.Thing`, and every cross-file call of that shape went unchecked.
+- The dead-code scan leaves a decorated definition alone. A route handler, a
+  fixture and a registered callback are all called by the framework that
+  holds the decorator, and no call site appears in the project. A web module
+  reported every one of its handlers as dead.
+
 ## [0.3.4] - 2026-08-22
 
 Patch release: hardening fixes from the post-release deep review of the
